@@ -1,0 +1,92 @@
+[phase]
+  id = "task-preconditions"
+  title = "task-preconditions"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "A plan.toml task can declare preconditions, and `dross validate` rejects a malformed one (empty command, unknown field)."
+
+[[criteria]]
+  id = "c-2"
+  text = "`dross task status <phase> <task> in_progress` runs the task's preconditions; if any fails, it exits non-zero, the task stays pending, and the output names the failing precondition, its exit code and the tail of its output."
+  deferred = ["189f66578878a28a"]
+
+[[criteria]]
+  id = "c-3"
+  text = "A precondition can bound a measurement: its command prints a number, and the task refuses to start when the number is past the bound, stating measured value and bound. A value exactly at the bound passes."
+
+[[criteria]]
+  id = "c-4"
+  text = "A precondition command never runs without exec consent: an unconsented command, or one changed since consent, is refused with the `dross trust` instruction and is not run."
+
+[[criteria]]
+  id = "c-5"
+  text = "`dross task add` and `dross task edit` can set and clear a task's preconditions, so plan.toml never needs a hand edit to carry one."
+
+[[criteria]]
+  id = "c-6"
+  text = "/dross-plan tells the planner to encode any 'before X, check Y' gate as a precondition, and plan review flags a task whose description states a gate in prose with no precondition."
+
+[[criteria]]
+  id = "c-7"
+  text = "When a precondition refuses, /dross-execute stops that task and surfaces the refusal (pair: fix / replan / fail choice; solo: halt); no prompt path starts the task by another route."
+
+[[criteria]]
+  id = "c-8"
+  text = "`dross task check <phase> <task>` evaluates a task's preconditions with the same verdict and output as c-2, exits non-zero on failure, and never changes the task's status."
+
+[[criteria]]
+  id = "c-9"
+  text = "A precondition that runs past its timeout is killed and counts as failed; the refusal names the timeout."
+
+[[criteria]]
+  id = "c-10"
+  text = "A measurement command whose stdout does not parse as a single number fails as unparseable and quotes what it printed; it is never coerced to 0 or treated as a pass."
+
+[[criteria]]
+  id = "c-11"
+  text = "Preconditions gate only the transition into in_progress: re-setting a task already in_progress skips them; a retry from pending or failed re-runs them."
+
+[[decisions]]
+  key = "consent_granularity"
+  choice = "Per phase: `dross trust --preconditions <phase>` fingerprints the phase's whole precondition set; any add or edit revokes it."
+  why = "One grant after plan lock; mirrors the existing --replay grant shape."
+  locked = true
+
+[[decisions]]
+  key = "exec_location"
+  choice = "Preconditions run locally via sh -c at the repo root; no remote runner path."
+  why = "Simple and fast; a heavy measurement can call dross test or ssh itself."
+  locked = true
+
+[[decisions]]
+  key = "precondition_schema"
+  choice = "Each precondition is a table on the task: required run (command), optional max and/or min numeric bound, optional timeout (Go duration, default 60s), optional why."
+  why = "Exit-0 and bounded-measurement forms share one shape; min covers at-least checks like coverage floors."
+  locked = true
+
+[[decisions]]
+  key = "no_bypass"
+  choice = "No override flag skips a precondition; the fix path for a wrong precondition is dross task edit, visible in the plan."
+  why = "A bypass flag turns the gate back into prose; an edit leaves a reviewable record."
+  locked = true
+
+[[edges]]
+  class = "boundary"
+  outcome = "covered"
+  criteria = ["c-3", "c-9"]
+
+[[edges]]
+  class = "precision"
+  outcome = "covered"
+  criteria = ["c-3", "c-10"]
+
+[[edges]]
+  class = "idempotency"
+  outcome = "covered"
+  criteria = ["c-11"]
+
+[[deferred]]
+  text = "Remote precondition execution: a per-precondition opt-in that sends the command to the configured test runner."
+  why = "Timing measurements differ laptop vs helicon; local-only is enough until a precondition needs runner hardware."

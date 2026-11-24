@@ -103,6 +103,11 @@ type differ struct {
 	// path (task → id). A keyed array matches elements by that field; every
 	// other array keeps the positional / deep-equal matching.
 	idFields map[string]string
+	// within is the element the differ is inside when it walks the nested
+	// array-of-tables of a keyed element — [[task.preconditions]] of task 2 is
+	// diffed with within = [2] — and nil everywhere else. Every op carries it
+	// as outer, so the patcher can tell task 2's blocks from task 3's.
+	within []int
 }
 
 // diff returns the ops that take old to new, or an error naming the first
@@ -158,7 +163,7 @@ func (d *differ) keys(path []string, old, new map[string]any) []string {
 
 // table diffs two tables key by key. elem is the array element the table is,
 // when it is one; a table nested INSIDE such an element has no op spelling
-// and is refused by path.
+// and is refused by path, except the one shape nested allows.
 func (d *differ) table(path []string, elem int, old, new map[string]any) error {
 	for _, k := range d.keys(path, old, new) {
 		ov, oOK := old[k]
@@ -180,11 +185,36 @@ func (d *differ) table(path []string, elem int, old, new map[string]any) error {
 	return nil
 }
 
-func (d *differ) nested(path []string, elem int, child []string) error {
-	if elem >= 0 {
-		return fmt.Errorf("%s: a table nested inside an array-of-tables element cannot be patched", strings.Join(child, "."))
+// nested decides whether child — a table or array-of-tables under path — has
+// an op spelling, and returns the enclosing elements ops inside it carry.
+// Outside any array element everything does. Inside one, only an
+// array-of-tables directly under an element of a keyed array does (the
+// [[task.preconditions]] blocks of one [[task]]): the differ steps in carrying
+// that element's index. A plain table there, an array under an unkeyed
+// array's element, and anything one level deeper are refused by path.
+func (d *differ) nested(path []string, elem int, child []string, kind nodeKind) ([]int, error) {
+	if elem < 0 {
+		return d.within, nil
 	}
-	return nil
+	if kind == kindArrayOfTables && d.within == nil && d.keyed(path) {
+		return []int{elem}, nil
+	}
+	return nil, fmt.Errorf("%s: a table nested inside an array-of-tables element cannot be patched", strings.Join(child, "."))
+}
+
+// keyed reports whether the array-of-tables at path matches by identity.
+func (d *differ) keyed(path []string) bool {
+	_, ok := d.idFields[strings.Join(path, ".")]
+	return ok
+}
+
+// inside runs f with within as the enclosing elements, restoring the old
+// ones after.
+func (d *differ) inside(within []int, f func() error) error {
+	saved := d.within
+	d.within = within
+	defer func() { d.within = saved }()
+	return f()
 }
 
 func (d *differ) add(path []string, elem int, k string, child []string, nv any) error {
@@ -194,23 +224,27 @@ func (d *differ) add(path []string, elem int, k string, child []string, nv any) 
 	}
 	switch kind {
 	case kindLeaf:
-		d.ops = append(d.ops, op{kind: opKey, table: path, elem: elem, key: k, value: nv})
+		d.ops = append(d.ops, op{kind: opKey, table: path, elem: elem, outer: d.within, key: k, value: nv})
 	case kindTable:
-		if err := d.nested(path, elem, child); err != nil {
+		if _, err := d.nested(path, elem, child, kind); err != nil {
 			return err
 		}
 		return d.table(child, -1, map[string]any{}, nv.(map[string]any))
 	case kindArrayOfTables:
-		if err := d.nested(path, elem, child); err != nil {
+		within, err := d.nested(path, elem, child, kind)
+		if err != nil {
 			return err
 		}
-		for _, e := range nv.([]map[string]any) {
-			b, err := d.block(child, e)
-			if err != nil {
-				return err
+		return d.inside(within, func() error {
+			for _, e := range nv.([]map[string]any) {
+				b, err := d.block(child, e)
+				if err != nil {
+					return err
+				}
+				d.ops = append(d.ops, op{kind: opAppendElem, table: child, elem: -1, outer: d.within, value: b})
 			}
-			d.ops = append(d.ops, op{kind: opAppendElem, table: child, elem: -1, value: b})
-		}
+			return nil
+		})
 	}
 	return nil
 }
@@ -222,19 +256,20 @@ func (d *differ) remove(path []string, elem int, k string, child []string, ov an
 	}
 	switch kind {
 	case kindLeaf:
-		d.ops = append(d.ops, op{kind: opKey, table: path, elem: elem, key: k})
+		d.ops = append(d.ops, op{kind: opKey, table: path, elem: elem, outer: d.within, key: k})
 	case kindTable:
-		if err := d.nested(path, elem, child); err != nil {
+		if _, err := d.nested(path, elem, child, kind); err != nil {
 			return err
 		}
 		return d.table(child, -1, ov.(map[string]any), map[string]any{})
 	case kindArrayOfTables:
-		if err := d.nested(path, elem, child); err != nil {
+		within, err := d.nested(path, elem, child, kind)
+		if err != nil {
 			return err
 		}
 		// Highest index first: each delete renumbers the elements after it.
 		for i := len(ov.([]map[string]any)) - 1; i >= 0; i-- {
-			d.ops = append(d.ops, op{kind: opDeleteElem, table: child, elem: i})
+			d.ops = append(d.ops, op{kind: opDeleteElem, table: child, elem: i, outer: within})
 		}
 	}
 	return nil
@@ -255,18 +290,21 @@ func (d *differ) change(path []string, elem int, k string, child []string, ov, n
 	switch okind {
 	case kindLeaf:
 		if !reflect.DeepEqual(ov, nv) {
-			d.ops = append(d.ops, op{kind: opKey, table: path, elem: elem, key: k, value: nv})
+			d.ops = append(d.ops, op{kind: opKey, table: path, elem: elem, outer: d.within, key: k, value: nv})
 		}
 	case kindTable:
-		if err := d.nested(path, elem, child); err != nil {
+		if _, err := d.nested(path, elem, child, okind); err != nil {
 			return err
 		}
 		return d.table(child, -1, ov.(map[string]any), nv.(map[string]any))
 	case kindArrayOfTables:
-		if err := d.nested(path, elem, child); err != nil {
+		within, err := d.nested(path, elem, child, okind)
+		if err != nil {
 			return err
 		}
-		return d.arrayOfTables(child, ov.([]map[string]any), nv.([]map[string]any))
+		return d.inside(within, func() error {
+			return d.arrayOfTables(child, ov.([]map[string]any), nv.([]map[string]any))
+		})
 	}
 	return nil
 }
@@ -305,7 +343,7 @@ func (d *differ) arrayOfTables(path []string, old, new []map[string]any) error {
 		}
 	}
 	for i := len(gone) - 1; i >= 0; i-- {
-		d.ops = append(d.ops, op{kind: opDeleteElem, table: path, elem: gone[i]})
+		d.ops = append(d.ops, op{kind: opDeleteElem, table: path, elem: gone[i], outer: d.within})
 	}
 	for j, ne := range new {
 		if matched[j] {
@@ -315,7 +353,7 @@ func (d *differ) arrayOfTables(path []string, old, new []map[string]any) error {
 		if err != nil {
 			return err
 		}
-		d.ops = append(d.ops, op{kind: opAppendElem, table: path, elem: -1, value: b})
+		d.ops = append(d.ops, op{kind: opAppendElem, table: path, elem: -1, outer: d.within, value: b})
 	}
 	return nil
 }
@@ -347,7 +385,7 @@ func (d *differ) keyedArray(path []string, field string, old, new []map[string]a
 	}
 	for i := len(cur) - 1; i >= 0; i-- {
 		if _, keep := newIdx[cur[i]]; !keep {
-			d.ops = append(d.ops, op{kind: opDeleteElem, table: path, elem: i})
+			d.ops = append(d.ops, op{kind: opDeleteElem, table: path, elem: i, outer: d.within})
 			cur = slices.Delete(cur, i, i+1)
 		}
 	}
@@ -362,7 +400,7 @@ func (d *differ) keyedArray(path []string, field string, old, new []map[string]a
 			continue
 		}
 		j := slices.Index(cur, id)
-		d.ops = append(d.ops, op{kind: opMoveElem, table: path, elem: j, to: i})
+		d.ops = append(d.ops, op{kind: opMoveElem, table: path, elem: j, to: i, outer: d.within})
 		cur = slices.Insert(slices.Delete(cur, j, j+1), i, id)
 	}
 	for i, e := range new {
@@ -374,7 +412,7 @@ func (d *differ) keyedArray(path []string, field string, old, new []map[string]a
 		if err != nil {
 			return err
 		}
-		d.ops = append(d.ops, op{kind: opInsertElem, table: path, elem: i, value: b})
+		d.ops = append(d.ops, op{kind: opInsertElem, table: path, elem: i, outer: d.within, value: b})
 		cur = slices.Insert(cur, i, id)
 	}
 	for i, e := range new {
@@ -411,8 +449,17 @@ func identities(path []string, field string, elems []map[string]any) (map[string
 
 // block renders one element as an ordered block for opAppendElem. Every
 // value in it is classified, so an element carrying a shape the patcher
-// cannot write is refused here rather than at splice time.
+// cannot write is refused here rather than at splice time. An element of a
+// keyed array may carry arrays-of-tables of leaves — a new [[task]] with its
+// [[task.preconditions]] — written as a []block; nothing deeper, and nothing
+// under an unkeyed array's element, has a spelling.
 func (d *differ) block(path []string, e map[string]any) (block, error) {
+	return d.blockAt(path, e, d.within != nil)
+}
+
+// blockAt is block with inner set when e is itself a nested element, whose
+// own arrays-of-tables would be one level too deep.
+func (d *differ) blockAt(path []string, e map[string]any, inner bool) (block, error) {
 	var b block
 	for _, k := range d.keys(path, nil, e) {
 		child := append(append([]string{}, path...), k)
@@ -420,10 +467,22 @@ func (d *differ) block(path []string, e map[string]any) (block, error) {
 		if err != nil {
 			return nil, err
 		}
-		if kind != kindLeaf {
+		switch {
+		case kind == kindLeaf:
+			b = append(b, kv{k, e[k]})
+		case kind == kindArrayOfTables && !inner && d.keyed(path):
+			var elems []block
+			for _, se := range e[k].([]map[string]any) {
+				sb, err := d.blockAt(child, se, true)
+				if err != nil {
+					return nil, err
+				}
+				elems = append(elems, sb)
+			}
+			b = append(b, kv{k, elems})
+		default:
 			return nil, fmt.Errorf("%s: a table nested inside an array-of-tables element cannot be patched", strings.Join(child, "."))
 		}
-		b = append(b, kv{k, e[k]})
 	}
 	return b, nil
 }

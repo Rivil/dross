@@ -1,0 +1,121 @@
+[verify]
+  phase = "task-preconditions"
+  generated_at = 2026-11-24T17:31:52.431164Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-11-24T17:33:29.121095Z
+  measured_commit = "0678fee3dcad4a1602ada747dea6e33b61e76dbb"
+  measured_tree = "9fe5a857858f9bebdd413e03d2d5c76786d0f45e"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9315181518151815
+  mutants_killed = 1129
+  mutants_survived = 83
+  mutants_not_covered = 83
+  mutants_no_block = 74
+  mutants_test_gap = 9
+  mutants_in_scope = 1212
+  unclassified_in_scope = 0
+  criteria_total = 11
+  criteria_covered = 11
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 1129
+    survived = 83
+    timeout = 0
+    in_scope = 1212
+    score = 0.9315181518151815
+    file_count = 32
+    measured_on = "helicon"
+    whole_file = ["internal/boardsync/task_pull.go — adapter-lacks-range-runner", "internal/boardsync/task_pull_test.go — adapter-lacks-range-runner", "internal/cmd/execute_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/plan_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/task.go — adapter-lacks-range-runner", "internal/cmd/task_check_test.go — adapter-lacks-range-runner", "internal/cmd/task_precondition.go — adapter-lacks-range-runner", "internal/cmd/task_precondition_edit_test.go — adapter-lacks-range-runner", "internal/cmd/task_precondition_test.go — adapter-lacks-range-runner", "internal/cmd/trust.go — adapter-lacks-range-runner", "internal/cmd/trust_preconditions_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_precondition_test.go — adapter-lacks-range-runner", "internal/consent/preconditions.go — adapter-lacks-range-runner", "internal/consent/preconditions_test.go — adapter-lacks-range-runner", "internal/consent/store.go — adapter-lacks-range-runner", "internal/localstore/store_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/phase/plan_edit.go — adapter-lacks-range-runner", "internal/phase/plan_edit_test.go — adapter-lacks-range-runner", "internal/phase/plan_lossless_test.go — adapter-lacks-range-runner", "internal/phase/precondition.go — adapter-lacks-range-runner", "internal/phase/precondition_test.go — adapter-lacks-range-runner", "internal/precond/precond.go — adapter-lacks-range-runner", "internal/precond/precond_test.go — adapter-lacks-range-runner", "internal/project/patch.go — adapter-lacks-range-runner", "internal/project/patch_diff.go — adapter-lacks-range-runner", "internal/project/patch_keyed_test.go — adapter-lacks-range-runner", "internal/testlane/pgroup_unix.go — adapter-lacks-range-runner", "internal/testlane/pgroup_windows.go — adapter-lacks-range-runner", "internal/testlane/spawn.go — adapter-lacks-range-runner", "internal/testlane/spawn_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/validate_precondition_test.go:TestValidateReportsMalformedPreconditions", "internal/phase/precondition_test.go:TestPreconditionProblemsRefusesMalformedShapes", "internal/phase/precondition_test.go:TestLoadPlanRecordsUnknownPreconditionKeys", "internal/cmd/validate_precondition_test.go:TestValidateAcceptsAWellFormedPrecondition"]
+  notes = "validate exits non-zero naming `run is empty` and `unknown key \"bogus\"` (header + inline forms, non-finite bound); a well-formed one validates clean"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/task_precondition_test.go:TestFailingPreconditionRefusesWithExit3", "internal/cmd/task_precondition_test.go:TestRefusedRetryKeepsAFailedTaskAsItWas", "internal/precond/precond_test.go:TestFailureRendersPreconditionRunWhyExitAndTail", "internal/precond/precond_test.go:TestTailIsTheLastTwentyLines"]
+  notes = "`echo boom; exit 7` → exit 3 (never 7), output names `precondition 1`, `exit 7`, tail `boom`; plan.toml byte-identical so the task stays pending/failed"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/task_precondition_test.go:TestBoundedPreconditionsGateTheStart", "internal/precond/precond_test.go:TestBoundsAreInclusive", "internal/precond/precond_test.go:TestPassRendersMinBounds"]
+  notes = "7 over max 5 refuses with `measured 7, bound max 5`; 5 at max 5 starts; inclusive max/min edges (5.0001, 79.9) pinned exactly"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/task_precondition_test.go:TestUnconsentedPreconditionsNeverRun", "internal/cmd/task_check_test.go:TestTaskCheckNeverRunsUnconsented", "internal/consent/preconditions_test.go:TestPreconditionGrantIsPhaseAndLineBound", "internal/consent/preconditions_test.go:TestPreconditionsRefusalNamesThePhaseAndTheHumanStep"]
+  notes = "absent and stale (edited since grant) both exit 4 naming `dross trust --preconditions 01-test`, and the marker file is never created"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/cmd/task_precondition_edit_test.go:TestTaskAddPreconditionRoundTripsAndTouchesNoOtherTask", "internal/cmd/task_precondition_edit_test.go:TestTaskEditPreconditionSemantics", "internal/phase/plan_edit_test.go:TestEditTaskPreconditionsReplaceAndClear", "internal/cmd/task_precondition_edit_test.go:TestEditTaskClearsToNoKey"]
+  notes = "add round-trips run/max and touches no other bytes; edit replaces / appends / clears to no key; refused flag combinations write nothing"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/cmd/plan_prompt_test.go:TestPlanFieldTableNamesPreconditions", "internal/cmd/plan_prompt_test.go:TestPlanReviewBlocksProseGates"]
+  notes = "plan.md §2 field table row carries `\"before X, check Y\"` + `--precondition`; plan-review's Prose gates check is BLOCKING and names precondition (prompt-content guards)"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/execute_prompt_test.go:TestExecutePairRefusalOffersFixReplanFail", "internal/cmd/execute_prompt_test.go:TestSoloRefusalHalts", "internal/cmd/execute_prompt_test.go:TestTaskStartsOnlyThroughPick", "internal/cmd/execute_prompt_test.go:TestRefusalArmsNameNoBypass", "internal/boardsync/task_pull_test.go:TestBoardPullNeverStartsAGatedTask"]
+  notes = "pair arm offers exactly fix/replan/fail, solo arm halts without edit/next; every prompt+agent scanned for another start route; board pull leaves a gated task unstarted and names the status route"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/task_check_test.go:TestTaskCheckMatchesTheStatusGate", "internal/cmd/task_check_test.go:TestTaskCheckNeverWritesThePlan", "internal/cmd/task_check_test.go:TestTaskCheckNeverRunsUnconsented"]
+  notes = "check output and exit byte-equal to the status gate's; pass/fail/in_progress/done all leave plan.toml byte-identical while still running the preconditions"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/precond/precond_test.go:TestTimeoutKillsAndSaysSo", "internal/precond/precond_test.go:TestTimeoutKillsTheWholeGroup", "internal/cmd/task_precondition_test.go:TestBoundedPreconditionsGateTheStart", "internal/testlane/spawn_test.go:TestRunLineCancelKillsTheWholeGroup"]
+  notes = "`sleep 30` with 200ms timeout fails with `timed out after 200ms` (no exit status) inside the bound; grandchildren of the group are killed"
+
+[[criterion]]
+  id = "c-10"
+  status = "covered"
+  tests = ["internal/precond/precond_test.go:TestMeasurementsNeverCoerce", "internal/precond/precond_test.go:TestOversizedStdoutIsUnparseableAndBounded", "internal/cmd/task_precondition_test.go:TestBoundedPreconditionsGateTheStart"]
+  notes = "12 non-numeric stdouts (empty, `12 ms`, NaN, Inf, hex, `1_000`, `3%`, multi-line…) never pass either bound and the reason quotes the output verbatim"
+
+[[criterion]]
+  id = "c-11"
+  status = "covered"
+  tests = ["internal/cmd/task_precondition_test.go:TestPreconditionsGateOnlyTheTransition", "internal/cmd/task_precondition_test.go:TestSecondInProgressRefusesBeforeAnySpawn"]
+  notes = "re-setting in_progress skips (marker absent, failing precondition ignored); starts from pending and failed both re-run (marker present)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "run r-20261124-133513 (helicon, HEAD 0678fee3): score 0.93 over 1212 in-scope mutants; 74 uncoverable by construction, efficacy 0.99 over the 1138 reachable; 9 NOT COVERED in a block no test ran, all inherited lines carrying per-mutant accepts (equivalent, unreachable, switch-case ceiling); 83 survivors, all accepted, 0 unclassified; 196 out-of-scope survivors filtered; all 32 files whole-file (gremlins lacks a range runner)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "run-1 gate closed: 22 unclassified → 0 (16 ceiling survivors accepted per-mutant in 5484c93b; 6 test gaps killed by t-13, c9ba6f9b)"
+
+[[finding]]
+  severity = "NOTE"
+  text = "in-hunk accepted survivors (precond.go:158/164, precondition.go:67, trust.go:308/310, patch.go:695/698, patch_diff.go:471/473) spot-checked: switch{} case conditions whose arms are asserted (TestTimeoutKillsAndSaysSo, TestParentCancelSaysCancelled, empty-run refusal, trust --check states) — attribution ceiling, no covered→weak downgrade"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo-review FLAGs resolved at HEAD: t-1 real plan writer over nested blocks (TestStatusSaveLeavesPreconditionBlocksAlone, TestPlanSaveRoundTripsPreconditions); t-7 inline clear now asserts the refusal outright; t-7 grantState helper now rejects Refused/unreadable stores; t-8 board-pull test now asserts plan/link unchanged and the status route"
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo-review FLAGs left, outside criterion text: t-12 execute.md §1a has no arm for an exit other than 0/3/4 from task status (agent gets no stop instruction); t-13 TestRunLineCancelKillsTheWholeGroup gives sh 200ms to write its pid file — a flake risk on a loaded runner, not a false pass; t-4 consent.Refused maps to exit 4; t-4 Result.Reason embeds quoted stdout; t-7 inline-form preconditions (hand-written only) need a rewrite before task edit"

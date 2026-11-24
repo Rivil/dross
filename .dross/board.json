@@ -74,6 +74,7 @@
     "supply-chain-currency": "DRO-423",
     "survivor-drain": "DRO-12",
     "survivor-lifecycle": "DRO-10",
+    "task-preconditions": "DRO-1176",
     "test-lane-config": "DRO-191",
     "test-output-summaries": "DRO-963",
     "test-summary-parsers": "DRO-1051",
@@ -3169,6 +3170,71 @@
       "issue": "DRO-426",
       "plan_status": "done",
       "board_state": "task-complete"
+    },
+    "task-preconditions/t-1": {
+      "issue": "DRO-1177",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-10": {
+      "issue": "DRO-1186",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-11": {
+      "issue": "DRO-1187",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-12": {
+      "issue": "DRO-1188",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-13": {
+      "issue": "DRO-1189",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-2": {
+      "issue": "DRO-1178",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-3": {
+      "issue": "DRO-1179",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-4": {
+      "issue": "DRO-1180",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-5": {
+      "issue": "DRO-1182",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-6": {
+      "issue": "DRO-1183",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-7": {
+      "issue": "DRO-1184",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-8": {
+      "issue": "DRO-1185",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "task-preconditions/t-9": {
+      "issue": "DRO-1181",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "test-lane-config/t-1": {
       "issue": "DRO-192",

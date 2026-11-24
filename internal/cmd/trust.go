@@ -9,13 +9,16 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Rivil/dross/internal/changes"
 	"github.com/Rivil/dross/internal/consent"
 	"github.com/Rivil/dross/internal/localstore"
+	"github.com/Rivil/dross/internal/phase"
 	"github.com/Rivil/dross/internal/project"
 )
 
@@ -194,6 +197,7 @@ func Trust() *cobra.Command {
 	var laneName string
 	var laneInstallName string
 	var testExempt bool
+	var preconditionsPhase string
 	c := &cobra.Command{
 		Use:   "trust",
 		Short: "Consent to dross running this repo's runtime.test_command on this machine",
@@ -201,12 +205,17 @@ func Trust() *cobra.Command {
 			".dross/local.toml, as a hash of the command. A clone carries no consent, and\n" +
 			"editing the command revokes it — see `dross doctor` for the current state.\n" +
 			"--replay <phase-id> grants the same consent for a phase's recorded red-proof\n" +
-			"replay command instead, which a repoint re-runs at the commit it proposes.",
+			"replay command instead, which a repoint re-runs at the commit it proposes.\n" +
+			"--preconditions <phase-id> grants it for a phase's whole set of task\n" +
+			"preconditions, which `dross task status … in_progress` runs before a task starts.",
 		Args: cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			root, err := FindRoot()
 			if err != nil {
 				return err
+			}
+			if preconditionsPhase != "" {
+				return trustPreconditions(root, preconditionsPhase, check)
 			}
 			if replayPhase != "" {
 				return trustReplay(root, replayPhase, check)
@@ -269,7 +278,104 @@ func Trust() *cobra.Command {
 	c.Flags().StringVar(&laneName, "lane", "", "grant consent for the named [[runtime.test_lane]]'s command instead of runtime.test_command")
 	c.Flags().StringVar(&laneInstallName, "lane-install", "", "grant consent for the named [[runtime.test_lane]]'s install line — a separate grant from --lane, because installing is a different act from running a suite")
 	c.Flags().BoolVar(&testExempt, "test-exempt", false, "grant consent for the runtime.test_exempt globs instead of runtime.test_command — paths matching them commit with no test run")
+	c.Flags().StringVar(&preconditionsPhase, "preconditions", "", "grant consent for <phase-id>'s whole set of task preconditions instead of runtime.test_command — adding, removing or editing any of them revokes it")
 	return c
+}
+
+// trustPreconditions is `dross trust --preconditions <phase-id>`: the grant
+// over one phase's whole precondition set (the locked consent_granularity
+// decision), bound to phase.PreconditionSetLine.
+//
+// Shaped like trustReplay — a phase-keyed grant over commands arriving in a
+// TRACKED file — with trustTestExempt's empty rule: a phase with no
+// preconditions runs nothing, so --check passes there and the grant form
+// refuses, because a success would leave the user believing something had been
+// recorded.
+func trustPreconditions(root, phaseID string, check bool) error {
+	repoDir := filepath.Dir(root)
+	if err := consent.RefuseTrackedLocal(repoDir); err != nil {
+		return err
+	}
+	plan, err := phase.LoadPlan(filepath.Join(phase.Dir(root, phaseID), "plan.toml"))
+	if err != nil {
+		return err
+	}
+	line := phase.PreconditionSetLine(plan)
+	store := localstore.GrantStore(root)
+	if check {
+		state, cerr := consent.PreconditionsConsented(store, repoDir, phaseID, line)
+		switch {
+		case cerr == nil, state == consent.NotApplicable:
+			return nil
+		case state == consent.Absent, state == consent.Stale:
+			// The state is named up front so a pre-flight can tell "never
+			// trusted" from "changed since trusted" without parsing the prose.
+			return fmt.Errorf("phase %s's precondition grant is %s: %w",
+				phaseID, state, consent.PreconditionsRefusal(phaseID, state, cerr))
+		default:
+			return consent.PreconditionsRefusal(phaseID, state, cerr)
+		}
+	}
+	if line == "" {
+		return fmt.Errorf(
+			"nothing to trust: phase %s declares no task preconditions, so none runs and\n"+
+				"no grant is needed. Add one with `dross task edit %s <task-id>` first", phaseID, phaseID)
+	}
+	problems := phase.PreconditionProblems(plan)
+	for _, u := range plan.UnknownPreconditionKeys {
+		problems = append(problems, u.String())
+	}
+	if len(problems) > 0 {
+		// Refused before the listing, so a set the gate would refuse anyway is
+		// never offered as something to accept.
+		return fmt.Errorf("refusing to trust phase %s's preconditions:\n\n    %s\n\n"+
+			"Fix them with `dross task edit`, then run this again", phaseID, strings.Join(problems, "\n    "))
+	}
+	// Printed BEFORE the write, and in full: every command, its bounds and its
+	// timeout. They arrive from TRACKED plan.toml, so a grant that did not show
+	// them would be consenting to whatever a clone happened to carry — and one
+	// grant covers the whole set.
+	Printf("trusting phase %s's task preconditions on this machine — every command this grant covers:\n\n", phaseID)
+	for _, t := range plan.Task {
+		for i, p := range t.Preconditions {
+			Printf("    %s precondition %d\n", t.ID, i+1)
+			Printf("        run:     %s\n", listingText(p.Run))
+			if p.Min != nil {
+				Printf("        min:     %s\n", strconv.FormatFloat(*p.Min, 'g', -1, 64))
+			}
+			if p.Max != nil {
+				Printf("        max:     %s\n", strconv.FormatFloat(*p.Max, 'g', -1, 64))
+			}
+			// PreconditionProblems passed above, so the timeout parses.
+			d, _ := p.EffectiveTimeout()
+			if p.Timeout == "" {
+				Printf("        timeout: %s (default)\n", d)
+			} else {
+				Printf("        timeout: %s\n", d)
+			}
+			if p.Why != "" {
+				Printf("        why:     %s\n", listingText(p.Why))
+			}
+		}
+	}
+	Print()
+	if err := consent.GrantPreconditionsConsent(store, phaseID, line); err != nil {
+		return err
+	}
+	Printf("recorded in %s/%s (gitignored — it does not travel with the repo).\n", RootDirName, localstore.File)
+	Printf("Adding, removing or editing any precondition in phase %s revokes this; every other phase's grant is untouched.\n", phaseID)
+	return nil
+}
+
+// listingText renders a plan value for the grant listing. A value carrying a
+// control character is quoted: a carriage return or a terminal escape in a
+// tracked plan could otherwise overwrite the very line the human is reading
+// before they consent to it.
+func listingText(s string) string {
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return strconv.Quote(s)
+	}
+	return s
 }
 
 // trustTestExempt is `dross trust --test-exempt`: the grant over the whole

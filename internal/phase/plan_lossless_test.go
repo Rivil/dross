@@ -94,3 +94,106 @@ func TestPlanCorpusOneLineStatusFlip(t *testing.T) {
 		})
 	}
 }
+
+// preconditionPlan carries precondition blocks in both forms, with comments
+// inside and between them, so a status save has something to disturb.
+const preconditionPlan = `[phase]
+id = "01-test"
+
+[[task]]
+id = "t-1"
+wave = 1
+title = "first"
+files = ["a.go"]
+covers = ["c-1"]
+status = "pending"
+
+# the build must stay green before t-1 starts
+[[task.preconditions]]
+run = "go build ./..."   # exit 0 is enough
+
+[[task.preconditions]]
+run = "go test ./x | wc -l"
+max = 3
+timeout = "90s"
+why = "no more than three failing lines"
+
+[[task]]
+id = "t-2"
+wave = 1
+title = "second"
+files = ["b.go"]
+covers = ["c-1"]
+preconditions = [{ run = "true", min = 1 }]
+`
+
+// TestStatusSaveLeavesPreconditionBlocksAlone: SetTaskStatus + Save on tasks
+// carrying preconditions — header form with comments, and inline form —
+// changes exactly the one status line (or inserts it where there was none),
+// and the preconditions reload unchanged.
+func TestStatusSaveLeavesPreconditionBlocksAlone(t *testing.T) {
+	for _, c := range []struct {
+		task      string
+		inserted  bool
+		wantLines []string
+	}{
+		{"t-1", false, []string{`status = "in_progress"`}},
+		{"t-2", true, []string{`status = "in_progress"`}},
+	} {
+		t.Run(c.task, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "plan.toml")
+			if err := os.WriteFile(path, []byte(preconditionPlan), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			before, err := LoadPlan(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := LoadPlan(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.SetTaskStatus(c.task, StatusInProgress)
+			if err := p.Save(path); err != nil {
+				t.Fatalf("save: %v", err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ol, gl := strings.Split(preconditionPlan, "\n"), strings.Split(string(got), "\n")
+			var diff []string
+			if c.inserted {
+				if len(gl) != len(ol)+1 {
+					t.Fatalf("got %d lines, want one inserted:\n%s", len(gl), got)
+				}
+				for i, j := 0, 0; i < len(gl); i++ {
+					if j < len(ol) && gl[i] == ol[j] {
+						j++
+						continue
+					}
+					diff = append(diff, gl[i])
+				}
+			} else {
+				if len(gl) != len(ol) {
+					t.Fatalf("got %d lines, want %d:\n%s", len(gl), len(ol), got)
+				}
+				for i := range ol {
+					if ol[i] != gl[i] {
+						diff = append(diff, gl[i])
+					}
+				}
+			}
+			if strings.Join(diff, "\n") != strings.Join(c.wantLines, "\n") {
+				t.Errorf("status save changed %q, want exactly %q:\n%s", diff, c.wantLines, got)
+			}
+			after, err := LoadPlan(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if PreconditionSetLine(after) != PreconditionSetLine(before) {
+				t.Errorf("preconditions moved on a status save:\n%s\n%s", PreconditionSetLine(before), PreconditionSetLine(after))
+			}
+		})
+	}
+}

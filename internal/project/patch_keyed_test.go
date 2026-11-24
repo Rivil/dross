@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -511,6 +512,484 @@ func TestMoveElemRefusesALaterDestination(t *testing.T) {
 		_, err := d.moveElem([]seg{{"task", 1}}, to)
 		if want := fmt.Sprintf("(1 → %d)", to); err == nil || !strings.Contains(err.Error(), "[[task]]") || !strings.Contains(err.Error(), want) {
 			t.Errorf("moveElem(1 → %d) = %v, want a refusal naming [[task]] and %s", to, err, want)
+		}
+	}
+}
+
+// precondDoc is plan.toml's task with its nested [[task.preconditions]]
+// blocks: an array-of-tables inside each element of a keyed one.
+type precondDoc struct {
+	Seq   int           `toml:"seq"`
+	Tasks []precondTask `toml:"task"`
+}
+
+type precondTask struct {
+	ID            string    `toml:"id"`
+	Status        string    `toml:"status"`
+	Title         string    `toml:"title,omitempty"`
+	Preconditions []precond `toml:"preconditions,omitempty"`
+}
+
+type precond struct {
+	Run string   `toml:"run"`
+	Max *float64 `toml:"max,omitempty"`
+	Why string   `toml:"why,omitempty"`
+}
+
+func loadPrecond(t *testing.T, path string) *precondDoc {
+	t.Helper()
+	var d precondDoc
+	if _, err := toml.DecodeFile(path, &d); err != nil {
+		t.Fatalf("reload: %v\n%s", err, readFile(t, path))
+	}
+	return &d
+}
+
+func fptr(f float64) *float64 { return &f }
+
+// precondSrc: t-2 carries two header-form blocks, one with a comment between
+// its keys and one with a key the struct does not model.
+const precondSrc = `# plan header
+seq = 3
+
+[[task]]
+  id = "t-1"
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  status = "pending"
+
+  [[task.preconditions]]
+    run = "true"
+    # first block's own note
+    why = "smoke"
+
+  [[task.preconditions]]
+    run = "wc -l < x"
+    max = 3.0
+    mx = 3
+
+# a loose note between t-2 and t-3
+
+# about t-3
+[[task]]
+  id = "t-3"
+  status = "pending"
+`
+
+// TestNestedStatusChangeTouchesOneLine: a status change on a plan whose t-2
+// carries precondition blocks saves, and changes exactly t-1's status line.
+func TestNestedStatusChangeTouchesOneLine(t *testing.T) {
+	path := seedKeyed(t, precondSrc)
+	d := loadPrecond(t, path)
+	d.Tasks[0].Status = "done"
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(precondSrc, "  id = \"t-1\"\n  status = \"pending\"", "  id = \"t-1\"\n  status = \"done\"", 1)
+	if got := readFile(t, path); got != want {
+		t.Errorf("status change wrote:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestNestedEditTouchesOnlyItsValue: changing preconditions[1].max splices that
+// one value; the comment in the other block and the unmodeled key stay.
+func TestNestedEditTouchesOnlyItsValue(t *testing.T) {
+	path := seedKeyed(t, precondSrc)
+	d := loadPrecond(t, path)
+	d.Tasks[1].Preconditions[1].Max = fptr(5)
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(precondSrc, "max = 3.0", "max = 5.0", 1)
+	if got := readFile(t, path); got != want {
+		t.Errorf("max edit wrote:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestNestedFirstPreconditionLandsInItsTask: t-2's first block goes at the end
+// of t-2's own span — not after t-3, whose block is the last
+// [[task.preconditions]] in the file — and a second one follows it there.
+func TestNestedFirstPreconditionLandsInItsTask(t *testing.T) {
+	src := strings.Replace(keyedSrc, "  id = \"t-3\"\n  status = \"pending\"\n",
+		"  id = \"t-3\"\n  status = \"pending\"\n\n  [[task.preconditions]]\n    run = \"three\"\n", 1)
+	path := seedKeyed(t, src)
+	d := loadPrecond(t, path)
+	d.Tasks[1].Preconditions = []precond{{Run: "make lint"}}
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	block := "\n  [[task.preconditions]]\n    run = \"make lint\"\n"
+	want := strings.Replace(src, "  title = \"two\"\n", "  title = \"two\"\n"+block, 1)
+	if got := readFile(t, path); got != want {
+		t.Errorf("first precondition wrote:\n%s\nwant:\n%s", got, want)
+	}
+	if back := loadPrecond(t, path); len(back.Tasks[1].Preconditions) != 1 || len(back.Tasks[2].Preconditions) != 1 || back.Tasks[2].Preconditions[0].Run != "three" {
+		t.Errorf("reload put the block in the wrong task: %+v", back.Tasks)
+	}
+
+	d = loadPrecond(t, path)
+	d.Tasks[1].Preconditions = append(d.Tasks[1].Preconditions, precond{Run: "make vet", Why: "second"})
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	second := block + "\n  [[task.preconditions]]\n    run = \"make vet\"\n    why = \"second\"\n"
+	want = strings.Replace(src, "  title = \"two\"\n", "  title = \"two\"\n"+second, 1)
+	if got := readFile(t, path); got != want {
+		t.Errorf("second precondition wrote:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestNestedClearTakesExactlyItsBlocks: clearing t-2's preconditions drops
+// both blocks — the unmodeled key with them — and leaves the loose note and
+// t-3's comment as they were, whether the blocks are spaced the encoder's way
+// or written tight against the task's keys.
+func TestNestedClearTakesExactlyItsBlocks(t *testing.T) {
+	spaced := strings.Replace(precondSrc, `
+  [[task.preconditions]]
+    run = "true"
+    # first block's own note
+    why = "smoke"
+
+  [[task.preconditions]]
+    run = "wc -l < x"
+    max = 3.0
+    mx = 3
+`, "", 1)
+	tight := "seq = 2\n\n[[task]]\n  id = \"t-2\"\n  status = \"pending\"\n  [[task.preconditions]]\n    run = \"a\"\n  [[task.preconditions]]\n    run = \"b\"\n    mx = 3\n\n# between t-2 and t-3\n[[task]]\n  id = \"t-3\"\n  status = \"pending\"\n"
+	for name, tc := range map[string]struct {
+		src, want string
+		task      int
+	}{
+		"spaced": {precondSrc, spaced, 1},
+		"tight":  {tight, "seq = 2\n\n[[task]]\n  id = \"t-2\"\n  status = \"pending\"\n\n# between t-2 and t-3\n[[task]]\n  id = \"t-3\"\n  status = \"pending\"\n", 0},
+	} {
+		path := seedKeyed(t, tc.src)
+		d := loadPrecond(t, path)
+		d.Tasks[tc.task].Preconditions = nil
+		if err := SaveTOML(path, d, byID); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := readFile(t, path); got != tc.want {
+			t.Errorf("%s: clearing wrote:\n%s\nwant:\n%s", name, got, tc.want)
+		}
+	}
+}
+
+// TestNestedDeleteKeepsAHeadingWithItsSibling: a comment right above the first
+// block heads the precondition list. Deleting that block leaves it hugging the
+// next sibling block; deleting the only block leaves it, and the separator
+// before the next task, where they were.
+func TestNestedDeleteKeepsAHeadingWithItsSibling(t *testing.T) {
+	two := "[[task]]\n  id = \"t-1\"\n  status = \"pending\"\n  # gates\n  [[task.preconditions]]\n    run = \"a\"\n\n  [[task.preconditions]]\n    run = \"b\"\n\n[[task]]\n  id = \"t-2\"\n  status = \"pending\"\n"
+	path := seedKeyed(t, two)
+	d := loadPrecond(t, path)
+	d.Tasks[0].Preconditions = d.Tasks[0].Preconditions[1:]
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readFile(t, path), "[[task]]\n  id = \"t-1\"\n  status = \"pending\"\n  # gates\n  [[task.preconditions]]\n    run = \"b\"\n\n[[task]]\n  id = \"t-2\"\n  status = \"pending\"\n"; got != want {
+		t.Errorf("deleting the first of two wrote:\n%s\nwant:\n%s", got, want)
+	}
+
+	d = loadPrecond(t, path)
+	d.Tasks[0].Preconditions = nil
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := readFile(t, path), "[[task]]\n  id = \"t-1\"\n  status = \"pending\"\n  # gates\n\n[[task]]\n  id = \"t-2\"\n  status = \"pending\"\n"; got != want {
+		t.Errorf("deleting the only block wrote:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestNestedNewTaskRendersItsBlocks: a new task carrying preconditions — at
+// the end (task add) and in the middle (task add --after) — renders them after
+// its own [[task]] header, and the file reloads as the saved value.
+func TestNestedNewTaskRendersItsBlocks(t *testing.T) {
+	newTask := precondTask{ID: "t-9", Status: "pending", Preconditions: []precond{
+		{Run: "go vet ./...", Max: fptr(2)},
+		{Run: "true", Why: "w"},
+	}}
+	rendered := "[[task]]\n  id = \"t-9\"\n  status = \"pending\"\n\n  [[task.preconditions]]\n    run = \"go vet ./...\"\n    max = 2.0\n\n  [[task.preconditions]]\n    run = \"true\"\n    why = \"w\"\n"
+	for _, at := range []int{3, 1} {
+		path := seedKeyed(t, precondSrc)
+		d := loadPrecond(t, path)
+		d.Tasks = append(d.Tasks[:at], append([]precondTask{newTask}, d.Tasks[at:]...)...)
+		if err := SaveTOML(path, d, byID); err != nil {
+			t.Fatalf("at %d: %v", at, err)
+		}
+		got := readFile(t, path)
+		if !strings.Contains(got, rendered) {
+			t.Errorf("at %d: the new task's blocks are not under its header:\n%s", at, got)
+		}
+		if back := loadPrecond(t, path); !reflect.DeepEqual(back, d) {
+			t.Errorf("at %d: reload = %+v\nwant %+v", at, back, d)
+		}
+	}
+}
+
+// ownedSrc: every task owns blocks, so a span that loses track of them shows
+// up as a block reattached to a neighbour.
+const ownedSrc = `seq = 3
+
+[[task]]
+  id = "t-1"
+  status = "pending"
+
+  [[task.preconditions]]
+    run = "one-a"
+
+  [[task.preconditions]]
+    run = "one-b"
+
+[[task]]
+  id = "t-2"
+  status = "pending"
+
+  [[task.preconditions]]
+    run = "two-a"
+
+# about t-3
+[[task]]
+  id = "t-3"
+  status = "pending"
+
+  [[task.preconditions]]
+    run = "three-a"
+    max = 1.0
+`
+
+// TestNestedBlocksTravelWithTheirTask: moving, deleting and inserting tasks
+// carries each task's blocks as part of its span.
+func TestNestedBlocksTravelWithTheirTask(t *testing.T) {
+	for name, edit := range map[string]func(d *precondDoc){
+		"move t-3 before t-1": func(d *precondDoc) { d.Tasks = []precondTask{d.Tasks[2], d.Tasks[0], d.Tasks[1]} },
+		"delete t-2":          func(d *precondDoc) { d.Tasks = []precondTask{d.Tasks[0], d.Tasks[2]} },
+		"add after t-1": func(d *precondDoc) {
+			d.Tasks = append(d.Tasks[:1], append([]precondTask{{ID: "t-9", Status: "pending"}}, d.Tasks[1:]...)...)
+		},
+	} {
+		path := seedKeyed(t, ownedSrc)
+		d := loadPrecond(t, path)
+		edit(d)
+		if err := SaveTOML(path, d, byID); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		got := readFile(t, path)
+		if back := loadPrecond(t, path); !reflect.DeepEqual(back, d) {
+			t.Errorf("%s: reload = %+v\nwant %+v\n%s", name, back, d, got)
+		}
+		if name == "move t-3 before t-1" && !strings.HasPrefix(got, "seq = 3\n\n# about t-3\n[[task]]\n  id = \"t-3\"\n  status = \"pending\"\n\n  [[task.preconditions]]\n    run = \"three-a\"\n    max = 1.0\n\n[[task]]\n  id = \"t-1\"") {
+			t.Errorf("%s: t-3 did not move whole with its comment and block:\n%s", name, got)
+		}
+		if name == "delete t-2" && strings.Contains(got, "two-a") {
+			t.Errorf("%s: t-2's block survived:\n%s", name, got)
+		}
+	}
+}
+
+// TestNestedInlineForm: an element spelling its preconditions inline takes a
+// status change, but an edit to that inline list is refused by name with the
+// file byte-unchanged — and it does not block a header-form edit in another
+// task.
+func TestNestedInlineForm(t *testing.T) {
+	src := `[[task]]
+  id = "t-1"
+  status = "pending"
+  preconditions = [{run = "a", max = 3.0}]
+
+[[task]]
+  id = "t-2"
+  status = "pending"
+
+  [[task.preconditions]]
+    run = "b"
+`
+	path := seedKeyed(t, src)
+	d := loadPrecond(t, path)
+	d.Tasks[0].Status = "done"
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatalf("status change next to an inline list: %v", err)
+	}
+	changed := strings.Replace(src, "  id = \"t-1\"\n  status = \"pending\"", "  id = \"t-1\"\n  status = \"done\"", 1)
+	if got := readFile(t, path); got != changed {
+		t.Errorf("status change wrote:\n%s\nwant:\n%s", got, changed)
+	}
+
+	for name, edit := range map[string]func(d *precondDoc){
+		"set a key":      func(d *precondDoc) { d.Tasks[0].Preconditions[0].Max = fptr(5) },
+		"append a block": func(d *precondDoc) { d.Tasks[0].Preconditions = append(d.Tasks[0].Preconditions, precond{Run: "c"}) },
+	} {
+		d = loadPrecond(t, path)
+		edit(d)
+		err := SaveTOML(path, d, byID)
+		if err == nil || !strings.Contains(err.Error(), "task.preconditions at line 4 is an inline table") {
+			t.Errorf("%s: err = %v, want the inline refusal naming task.preconditions", name, err)
+		}
+		if got := readFile(t, path); got != changed {
+			t.Errorf("%s: a refused save wrote:\n%s", name, got)
+		}
+	}
+
+	d = loadPrecond(t, path)
+	d.Tasks[1].Preconditions[0].Run = "c"
+	if err := SaveTOML(path, d, byID); err != nil {
+		t.Fatalf("header-form edit beside an inline list: %v", err)
+	}
+	if got, want := readFile(t, path), strings.Replace(changed, `run = "b"`, `run = "c"`, 1); got != want {
+		t.Errorf("header-form edit wrote:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// deepDoc nests one level past what has a spelling: a precondition with its
+// own table and its own array-of-tables.
+type deepDoc struct {
+	Tasks []deepTask `toml:"task"`
+}
+
+type deepTask struct {
+	ID            string    `toml:"id"`
+	Preconditions []deepPre `toml:"preconditions,omitempty"`
+}
+
+type deepPre struct {
+	Run   string            `toml:"run"`
+	Env   map[string]string `toml:"env,omitempty"`
+	Steps []deepStep        `toml:"steps,omitempty"`
+}
+
+type deepStep struct {
+	Cmd string `toml:"cmd"`
+}
+
+// TestNestedRefusalStaysNarrow: only an array-of-tables directly under a
+// keyed element has a spelling. One level deeper — a table or an array in a
+// precondition, on an existing task or a new one — and any nesting under an
+// unkeyed array are refused by dotted path with the file untouched.
+func TestNestedRefusalStaysNarrow(t *testing.T) {
+	src := "[[task]]\n  id = \"t-1\"\n\n  [[task.preconditions]]\n    run = \"a\"\n"
+	for name, tc := range map[string]struct {
+		edit func(d *deepDoc)
+		want string
+	}{
+		"table in a precondition": {func(d *deepDoc) { d.Tasks[0].Preconditions[0].Env = map[string]string{"A": "1"} }, "task.preconditions.env: a table nested inside"},
+		"array in a precondition": {func(d *deepDoc) { d.Tasks[0].Preconditions[0].Steps = []deepStep{{Cmd: "x"}} }, "task.preconditions.steps: a table nested inside"},
+		"new block carrying a table": {func(d *deepDoc) {
+			d.Tasks[0].Preconditions = append(d.Tasks[0].Preconditions, deepPre{Run: "b", Env: map[string]string{"A": "1"}})
+		}, "task.preconditions.env: a table nested inside"},
+		"new task carrying a deep block": {func(d *deepDoc) {
+			d.Tasks = append(d.Tasks, deepTask{ID: "t-2", Preconditions: []deepPre{{Run: "b", Steps: []deepStep{{Cmd: "x"}}}}})
+		}, "task.preconditions.steps: a table nested inside"},
+	} {
+		path := seedKeyed(t, src)
+		var d deepDoc
+		if _, err := toml.DecodeFile(path, &d); err != nil {
+			t.Fatal(err)
+		}
+		tc.edit(&d)
+		if err := SaveTOML(path, &d, byID); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+		if got := readFile(t, path); got != src {
+			t.Errorf("%s: a refused save wrote:\n%s", name, got)
+		}
+	}
+
+	// Unkeyed, the same blocks have no spelling at all: a status change on
+	// any task is refused rather than guessed.
+	path := seedKeyed(t, precondSrc)
+	d := loadPrecond(t, path)
+	d.Tasks[0].Status = "done"
+	if err := SaveTOML(path, d); err == nil || !strings.Contains(err.Error(), "task.preconditions: a table nested inside") {
+		t.Errorf("unkeyed: err = %v, want a refusal naming task.preconditions", err)
+	}
+	if got := readFile(t, path); got != precondSrc {
+		t.Errorf("unkeyed: a refused save wrote:\n%s", got)
+	}
+}
+
+// TestQualifyNestedElement pins the op shapes the patcher accepts under an
+// array element: a nested array addressed by element and outer is reached;
+// one with no outer, an outer past the end, an outer on an array nested in
+// nothing, a plain-table op through an element, or two levels of nesting is
+// refused by name.
+func TestQualifyNestedElement(t *testing.T) {
+	src := []byte(precondSrc)
+	pre := []string{"task", "preconditions"}
+	out, err := apply(src, []op{{kind: opKey, table: pre, elem: 0, outer: []int{1}, key: "why", value: "s2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.Replace(precondSrc, `why = "smoke"`, `why = "s2"`, 1); string(out) != want {
+		t.Errorf("nested set wrote:\n%s", out)
+	}
+	for name, tc := range map[string]struct {
+		o    op
+		want string
+	}{
+		"no outer":         {op{kind: opKey, table: pre, elem: 0, key: "why", value: "x"}, "[[task]] is an array-of-tables: a table nested inside one of its elements"},
+		"outer past end":   {op{kind: opKey, table: pre, elem: 0, outer: []int{7}, key: "why", value: "x"}, "[[task]] has 3 element(s), no element 7"},
+		"plain table":      {op{kind: opKey, table: []string{"task", "sub"}, elem: -1, outer: []int{1}, key: "k", value: "x"}, "a table nested inside one of its elements"},
+		"outer on top":     {op{kind: opKey, table: []string{"task"}, elem: 0, outer: []int{1}, key: "status", value: "x"}, "no array-of-tables encloses it"},
+		"element past end": {op{kind: opKey, table: pre, elem: 2, outer: []int{1}, key: "why", value: "x"}, "has 2 element(s), no element 2"},
+		"two levels deep":  {op{kind: opKey, table: []string{"task", "preconditions", "steps"}, elem: 0, outer: []int{1}, key: "c", value: "x"}, "a table nested inside one of its elements"},
+	} {
+		out, err := apply(src, []op{tc.o})
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+		if string(out) != precondSrc {
+			t.Errorf("%s: bytes changed on a refused op", name)
+		}
+	}
+	if got := (op{kind: opDeleteElem, table: pre, elem: 1, outer: []int{2}}).String(); got != "delete [[task[2].preconditions[1]]]" {
+		t.Errorf("String = %q", got)
+	}
+}
+
+// TestElemCountNestedTwoDeep: elemCount resolves every array level it passes
+// through by its own outer index, so an array nested two deep counts the
+// elements of the one inner element named — not its first sibling's, and not
+// by reusing the outermost index.
+func TestElemCountNestedTwoDeep(t *testing.T) {
+	src := `[[a]]
+  [[a.b]]
+    [[a.b.c]]
+      n = 1
+    [[a.b.c]]
+      n = 2
+  [[a.b]]
+    [[a.b.c]]
+      n = 3
+[[a]]
+  [[a.b]]
+    [[a.b.c]]
+      n = 4
+    [[a.b.c]]
+      n = 5
+    [[a.b.c]]
+      n = 6
+`
+	d, err := indexDoc([]byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		table []string
+		outer []int
+		want  int
+	}{
+		{[]string{"a"}, nil, 2},
+		{[]string{"a", "b"}, []int{0}, 2},
+		{[]string{"a", "b"}, []int{1}, 1},
+		{[]string{"a", "b", "c"}, []int{0, 0}, 2},
+		{[]string{"a", "b", "c"}, []int{0, 1}, 1},
+		{[]string{"a", "b", "c"}, []int{1, 0}, 3},
+		{[]string{"a", "b", "c"}, []int{1, 1}, 0},
+	} {
+		if got := d.elemCount(c.table, c.outer); got != c.want {
+			t.Errorf("elemCount(%v, %v) = %d, want %d", c.table, c.outer, got, c.want)
 		}
 	}
 }

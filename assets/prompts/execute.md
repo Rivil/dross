@@ -55,11 +55,24 @@ Repeat until `dross task next <phase>` returns nothing.
 ```
 TASK_ID=$(dross task next <phase>)
 ```
-Empty → step 2. Otherwise mark it in progress; the second line moves its board card, so call it unconditionally:
+Empty → step 2. Otherwise mark it in progress:
 ```
 dross task status <phase> $TASK_ID in_progress
+```
+Only on exit 0, move its board card:
+```
 dross issue task sync <phase> $TASK_ID --status task-in-progress
 ```
+That start runs the task's preconditions, and it is the only way a task starts. A refusal leaves the task `pending` and its card where it was; stderr names the failing precondition:
+
+- **Exit 3 — a precondition refused.** Surface its verdict. **Pair** → `AskUserQuestion`:
+  - `fix` — fix the condition; or, if the precondition itself is wrong, correct it with `dross task edit <phase> $TASK_ID --precondition …` and let them run `dross trust --preconditions <phase>`. Re-check with `dross task check <phase> $TASK_ID`, then re-run this step.
+  - `replan` — stop the loop; route the user to `/dross-plan`.
+  - `fail` — `dross task status <phase> $TASK_ID failed --reason "precondition: <the failing one>"`, then advance.
+
+  **Solo** → halt the run (the solo partial's refusal arm).
+- **Exit 4 — no precondition consent.** Stop, show the user `dross task show <phase> $TASK_ID`, and let them run `dross trust --preconditions <phase>`. Never run `dross trust` on their behalf.
+
 Show the user its full record: `dross task show <phase> $TASK_ID`.
 
 ### 1b. Code insight

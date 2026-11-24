@@ -427,3 +427,94 @@ func TestCollectTaskMovesSortsByTaskID(t *testing.T) {
 		t.Errorf("order = %s,%s — want t-1 then t-2", moves[0].TaskID, moves[1].TaskID)
 	}
 }
+
+// gatedPullPlan: t-1 is pending and carries a precondition; t-2 is pending and
+// carries none; t-3 is in_progress and carries one.
+const gatedPullPlan = `[phase]
+id = "p1"
+[[task]]
+id = "t-1"
+wave = 1
+title = "gated"
+status = "pending"
+
+[[task.preconditions]]
+run = "true"
+
+[[task]]
+id = "t-2"
+wave = 1
+title = "ungated"
+status = "pending"
+
+[[task]]
+id = "t-3"
+wave = 1
+title = "gated, running"
+status = "in_progress"
+
+[[task.preconditions]]
+run = "true"
+`
+
+func boardStart(id, from string) TaskMoveVerdict {
+	return TaskMoveVerdict{
+		TaskID: id, Issue: "PROJ-" + id, Kind: TaskBoardMoved,
+		PlanStatus: from, BoardState: StatusTaskInProgress, NewStatus: phase.StatusInProgress,
+	}
+}
+
+// TestBoardPullNeverStartsAGatedTask: a card dragged into in_progress for a
+// task with preconditions is reported with the `task status` route, not
+// written to the plan or the ledger, and --apply exits non-zero — while a clean
+// move in the same run still applies.
+func TestBoardPullNeverStartsAGatedTask(t *testing.T) {
+	for _, from := range []string{phase.StatusPending, phase.StatusFailed} {
+		t.Run("from "+from, func(t *testing.T) {
+			var buf bytes.Buffer
+			body := strings.Replace(gatedPullPlan, `title = "gated"
+status = "pending"`, `title = "gated"
+status = "`+from+`"`, 1)
+			ctx, plan, planPath := pullFixture(t, body, &buf)
+			ctx.Board.SetTaskSynced("p1", "t-1", "PROJ-t-1", from, "")
+			ctx.Board.SetTaskSynced("p1", "t-3", "PROJ-t-3", phase.StatusInProgress, StatusTaskInProgress)
+			wasLink, _ := ctx.Board.TaskLinkFor("p1", "t-1")
+			moves := []TaskMoveVerdict{
+				boardStart("t-1", from),
+				{
+					TaskID: "t-3", Issue: "PROJ-t-3", Kind: TaskBoardMoved,
+					PlanStatus: phase.StatusInProgress, BoardState: StatusTaskInReview, NewStatus: phase.StatusDone,
+				},
+			}
+			err := ReportTaskMoves(ctx, "p1", plan, planPath, moves, true)
+			if err == nil {
+				t.Fatal("--apply that left a gated start unwritten exited zero")
+			}
+			if got := planTask(t, planPath, "t-1").Status; got != from {
+				t.Errorf("t-1 is %q, want it left %q", got, from)
+			}
+			if link, _ := ctx.Board.TaskLinkFor("p1", "t-1"); link != wasLink {
+				t.Errorf("t-1's agreement point moved: %+v, was %+v", link, wasLink)
+			}
+			if !strings.Contains(buf.String(), "dross task status p1 t-1 in_progress") {
+				t.Errorf("the output omits the task status route:\n%s", buf.String())
+			}
+			if got := planTask(t, planPath, "t-3").Status; got != phase.StatusDone {
+				t.Errorf("t-3's clean in_progress -> done move was not applied: %q", got)
+			}
+		})
+	}
+}
+
+// TestBoardPullStartsAnUngatedTask: the guard is only for tasks with
+// preconditions.
+func TestBoardPullStartsAnUngatedTask(t *testing.T) {
+	var buf bytes.Buffer
+	ctx, plan, planPath := pullFixture(t, gatedPullPlan, &buf)
+	if err := ReportTaskMoves(ctx, "p1", plan, planPath, []TaskMoveVerdict{boardStart("t-2", phase.StatusPending)}, true); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if got := planTask(t, planPath, "t-2").Status; got != phase.StatusInProgress {
+		t.Errorf("an ungated board start was not applied: t-2 is %q", got)
+	}
+}

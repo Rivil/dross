@@ -159,10 +159,20 @@ func LifecycleFromLabels(labels []string) string {
 // still apply, and the command exits non-zero at the END. Aborting on the first
 // conflict would make a single contested task hide every other move.
 func ReportTaskMoves(ctx *Ctx, phaseID string, plan *phase.Plan, planPath string, moves []TaskMoveVerdict, apply bool) error {
-	var applied, conflicts int
+	var applied, conflicts, gated int
 	for _, m := range moves {
 		switch m.Kind {
 		case TaskBoardMoved:
+			if startsGatedTask(plan, m) {
+				// A card dragged into in_progress would start the task without
+				// its preconditions running. The move is reported with the one
+				// route that runs them, never written, and the agreement point
+				// stays where it was so the next pull reports it again.
+				gated++
+				fmt.Fprintf(ctx.out(), "  %s  board moved it to %s, but it has preconditions — start it with `dross task status %s %s in_progress`\n",
+					m.TaskID, m.NewStatus, phaseID, m.TaskID)
+				continue
+			}
 			if apply {
 				if !plan.SetTaskStatus(m.TaskID, m.NewStatus) {
 					return fmt.Errorf("task %s vanished from the plan mid-run", m.TaskID)
@@ -184,7 +194,7 @@ func ReportTaskMoves(ctx *Ctx, phaseID string, plan *phase.Plan, planPath string
 		}
 	}
 
-	if applied == 0 && conflicts == 0 {
+	if applied == 0 && conflicts == 0 && gated == 0 {
 		fmt.Fprintln(ctx.out(), "no task moves on the board")
 		return nil
 	}
@@ -206,5 +216,22 @@ func ReportTaskMoves(ctx *Ctx, phaseID string, plan *phase.Plan, planPath string
 		return fmt.Errorf("%d task(s) changed on both sides since the last sync — resolve them by hand, "+
 			"then re-run: set the plan with `dross task status`, or move the card back", conflicts)
 	}
+	if apply && gated > 0 {
+		// Likewise after the clean moves: an --apply that left a board start
+		// unwritten must not read as done.
+		return fmt.Errorf("%d board move(s) into in_progress not applied — each task has preconditions; "+
+			"start it with `dross task status %s <task> in_progress`", gated, phaseID)
+	}
 	return nil
+}
+
+// startsGatedTask reports whether a board move would start a task that has
+// preconditions: into in_progress from any other status. Only `dross task
+// status … in_progress` may make that transition, because only it runs them.
+func startsGatedTask(plan *phase.Plan, m TaskMoveVerdict) bool {
+	if m.NewStatus != phase.StatusInProgress || m.PlanStatus == phase.StatusInProgress {
+		return false
+	}
+	t := plan.FindTask(m.TaskID)
+	return t != nil && len(t.Preconditions) > 0
 }

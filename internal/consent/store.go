@@ -53,6 +53,13 @@ type Grants struct {
 	// one per glob, so appending a glob stales the grant rather than leaving
 	// the rest of the list trusted beside it.
 	TrustedTestExempt string `toml:"trusted_test_exempt,omitempty"`
+
+	// TrustedPreconditions maps a phase id to sha256 of that phase's framed
+	// precondition set (PreconditionsFrame + the set line). Keyed by phase so
+	// granting one phase never satisfies or revokes another, and so a phase
+	// whose set changed reads Stale rather than never-trusted (the locked
+	// consent_granularity decision).
+	TrustedPreconditions map[string]string `toml:"trusted_preconditions,omitempty"`
 }
 
 // Store is the persistence seam. Load returns the grants currently on disk —

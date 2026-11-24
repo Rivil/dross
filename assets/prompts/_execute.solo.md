@@ -2,6 +2,8 @@ Solo run: these replace the pair-mode pauses for the whole run.
 
 - **Don't auto-retry test failures more than once in solo mode.** Bounded automation; failures need eyes.
 
+**Precondition refusal, solo** (§1a, exit 3 or 4) → halt the run there. The task stays `pending`; print its verdict and this re-entry line, then stop: `solo halted — <task-id> refused to start · clear the refusal, then /dross-execute --from <task-id>`. Changing a precondition or its consent is the human's call, never the run's: no edit, no re-trust, no `failed`, no next task.
+
 **§1c, solo** → skip the approval pause and proceed directly. Note "solo: yes" in the commit body: no user approved it.
 
 **Writer dispatch (`--solo` only).** After §1a, before §1b, ask dross whether the task's code goes to a writer:

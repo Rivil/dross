@@ -569,21 +569,32 @@ const (
 
 // op is one surgical edit. table is the dotted path of the table holding key;
 // elem is the element index when that table is an array-of-tables, -1
-// otherwise. A table nested INSIDE an array element (a [[a]] with its own
-// [a.sub]) has no spelling here and is refused by name — the project schema
-// has none, and an op shape that guesses which element would be worse than
-// no shape.
+// otherwise. One nesting has a spelling: an array-of-tables directly inside an
+// element of another ([[task.preconditions]] under one [[task]]), whose op
+// names the enclosing element in outer. Any other table nested INSIDE an
+// array element (a [[a]] with its own [a.sub]) is refused by name — an op
+// shape that guesses which element would be worse than no shape.
 type op struct {
 	kind  opKind
 	table []string
 	elem  int
+	// outer is the element of the enclosing array-of-tables when table is
+	// nested in one — [[task.preconditions]] of task 2 has outer [2] — and
+	// nil otherwise.
+	outer []int
 	to    int // opMoveElem's destination element
 	key   string
 	value any
 }
 
 func (o op) String() string {
-	t := strings.Join(o.table, ".")
+	parts := slices.Clone(o.table)
+	for k, e := range o.outer {
+		if i := len(parts) - 1 - len(o.outer) + k; i >= 0 {
+			parts[i] = fmt.Sprintf("%s[%d]", parts[i], e)
+		}
+	}
+	t := strings.Join(parts, ".")
 	if o.elem >= 0 {
 		t = fmt.Sprintf("%s[%d]", t, o.elem)
 	}
@@ -610,7 +621,8 @@ type kv struct {
 }
 
 // block is the ordered body of an array-of-tables element for opAppendElem.
-// A value that is itself a block becomes a sub-table header after the keys.
+// A value that is itself a block becomes a sub-table header after the keys; a
+// []block becomes one [[sub]] header per element, in order.
 type block []kv
 
 // apply performs ops on src in order, re-indexing after each so no offset
@@ -633,20 +645,23 @@ func apply(src []byte, ops []op) ([]byte, error) {
 }
 
 func (d *doc) applyOne(o op) ([]byte, error) {
-	if o.kind == opInsertElem && o.elem == d.elemCount(o.table) {
+	if o.kind == opInsertElem && o.elem == d.elemCount(o.table, o.outer) {
 		// Inserting at the end is an append.
 		o.kind, o.elem = opAppendElem, -1
-	}
-	target, err := d.qualify(o)
-	if err != nil {
-		return nil, err
 	}
 	names := append(append([]string{}, o.table...), o.key)
 	if o.kind != opKey {
 		names = o.table
 	}
-	if err := d.refuseInline(names); err != nil {
+	// The inline refusal goes first: an element's inline array of tables
+	// registers no elements, so qualify would otherwise fail it as absent
+	// rather than name the inline spelling the user has to rewrite.
+	target, qerr := d.qualify(o)
+	if err := d.refuseInline(names, target); err != nil {
 		return nil, err
+	}
+	if qerr != nil {
+		return nil, qerr
 	}
 	switch o.kind {
 	case opAppendElem:
@@ -664,17 +679,27 @@ func (d *doc) applyOne(o op) ([]byte, error) {
 	return d.setKey(target, o.key, o.value)
 }
 
-// qualify turns an op's table + elem into the seg path the index uses.
+// qualify turns an op's table + elem (+ outer) into the seg path the index
+// uses. An array-of-tables may sit inside an element of another only one level
+// deep, addressed by element, with outer naming the enclosing element; every
+// other path through an array element is refused by name.
 func (d *doc) qualify(o op) ([]seg, error) {
 	var path []seg
+	addressesElem := o.kind != opKey || o.elem >= 0
+	used := 0
 	for i, name := range o.table {
 		key := qualifiedKey(path, name)
 		n, isArray := d.arrays[key]
 		last := i == len(o.table)-1
 		switch {
-		case !last && isArray:
+		case !last && isArray && (i != len(o.table)-2 || !addressesElem || len(o.outer) != 1):
 			return nil, fmt.Errorf("[[%s]] is an array-of-tables: a table nested inside one of its elements cannot be patched",
 				strings.Join(o.table[:i+1], "."))
+		case !last && isArray && o.outer[0] >= n:
+			return nil, fmt.Errorf("[[%s]] has %d element(s), no element %d", strings.Join(o.table[:i+1], "."), n, o.outer[0])
+		case !last && isArray:
+			path = append(path, seg{name, o.outer[0]})
+			used++
 		case !last:
 			path = append(path, seg{name, -1})
 		case o.kind == opAppendElem:
@@ -687,6 +712,9 @@ func (d *doc) qualify(o op) ([]seg, error) {
 			path = append(path, seg{name, o.elem})
 		}
 	}
+	if used != len(o.outer) {
+		return nil, fmt.Errorf("%s: the op names an enclosing element, but no array-of-tables encloses it", strings.Join(o.table, "."))
+	}
 	return path, nil
 }
 
@@ -694,7 +722,10 @@ func (d *doc) qualify(o op) ([]seg, error) {
 // an inline table (or an array of them): splicing keys into `{...}` or
 // emitting a [header] beside it would either corrupt the value or redefine
 // the table, so the user is asked to rewrite it in header form first.
-func (d *doc) refuseInline(names []string) error {
+// target, when qualify resolved one, narrows the match to the op's own
+// elements: one [[task]] spelling its preconditions inline does not block a
+// header-form edit in another.
+func (d *doc) refuseInline(names []string, target []seg) error {
 	for i, ln := range d.lines {
 		if ln.kind != lineKey || !ln.key.inline {
 			continue
@@ -704,11 +735,25 @@ func (d *doc) refuseInline(names []string) error {
 		if len(full) > len(names) || !slices.Equal(full, names[:len(full)]) {
 			continue
 		}
+		if target != nil && !sameElems(ln.key.table, target) {
+			continue
+		}
 		dotted := strings.Join(full, ".")
 		return fmt.Errorf("%s at line %d is an inline table, which dross does not patch in place; rewrite it as a [%s] table (one key per line) and retry",
 			dotted, i+1, dotted)
 	}
 	return nil
+}
+
+// sameElems reports whether a and b name the same element at every position
+// both have.
+func sameElems(a, b []seg) bool {
+	for k := range min(len(a), len(b)) {
+		if a[k].elem != b[k].elem {
+			return false
+		}
+	}
+	return true
 }
 
 func segNames(path []seg) []string {
@@ -917,6 +962,9 @@ func (d *doc) deleteElem(target []seg) ([]byte, error) {
 		return nil, err
 	}
 	if from > 0 && d.lines[from-1].kind != lineBlank {
+		if d.keepsBlankBelow(target, from, last) {
+			return d.removeLines(from, last), nil
+		}
 		// A line that stays sits right against the element (a section comment
 		// over a first element): there is no separator above to take, so take
 		// the one below — what stays keeps hugging what follows.
@@ -928,11 +976,41 @@ func (d *doc) deleteElem(target []seg) ([]byte, error) {
 	return d.removeBlock(from, last), nil
 }
 
-// elemCount is how many elements the [[table]] array has (0 when absent).
-func (d *doc) elemCount(table []string) int {
+// keepsBlankBelow reports whether deleting nested element target — one with a
+// line it does not own right above it — must leave the blank lines below it.
+// Inside a parent element those blanks are the parent's separator from what
+// follows it, so they stay — unless a comment above heads a sibling sub-block
+// that follows, which then keeps hugging it. Top-level elements keep the
+// section-comment rule in deleteElem.
+func (d *doc) keepsBlankBelow(target []seg, from, last int) bool {
+	if len(target) < 2 || target[len(target)-2].elem < 0 {
+		return false
+	}
+	if d.lines[from-1].kind != lineComment {
+		return true
+	}
+	parent := target[:len(target)-1]
+	for i := last + 1; i < len(d.lines); i++ {
+		if d.lines[i].kind == lineBlank {
+			continue
+		}
+		return d.lines[i].kind != lineHeader || !hasSegPrefix(d.lines[i].hdr.path, parent)
+	}
+	return true
+}
+
+// elemCount is how many elements the [[table]] array has (0 when absent);
+// outer names the enclosing element when the array is nested in one.
+func (d *doc) elemCount(table []string, outer []int) int {
 	var path []seg
+	used := 0
 	for _, name := range table[:len(table)-1] {
-		path = append(path, seg{name, -1})
+		e := -1
+		if _, isArray := d.arrays[qualifiedKey(path, name)]; isArray && used < len(outer) {
+			e = outer[used]
+			used++
+		}
+		path = append(path, seg{name, e})
 	}
 	return d.arrays[qualifiedKey(path, table[len(table)-1])]
 }
@@ -1054,6 +1132,16 @@ func (d *doc) appendElem(target []seg, value any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Nested in an element: at the end of that element's span, so a first
+	// [[task.preconditions]] lands inside its own [[task]] and never after a
+	// later task's blocks.
+	if parent := target[:len(target)-1]; len(parent) > 0 && parent[len(parent)-1].elem >= 0 {
+		_, last, err := d.elemSpan(parent)
+		if err != nil {
+			return nil, err
+		}
+		return d.insertBlock(last, lines), nil
+	}
 	// After the last existing sibling (including any sub-tables it owns),
 	// else where a new table of this name would go.
 	anchor := d.newTableAnchor(names)
@@ -1104,7 +1192,7 @@ func (d *doc) renderTable(names []string, array bool, body block) ([]string, err
 	var subs []kv
 	for _, e := range body {
 		switch e.value.(type) {
-		case block, map[string]any:
+		case block, map[string]any, []block:
 			subs = append(subs, e)
 			continue
 		}
@@ -1119,11 +1207,22 @@ func (d *doc) renderTable(names []string, array bool, body block) ([]string, err
 		lines = append(lines, keyIndent+k+" = "+v)
 	}
 	for _, s := range subs {
+		subNames := append(append([]string{}, names...), s.key)
+		if elems, ok := s.value.([]block); ok {
+			for _, b := range elems {
+				sub, err := d.renderTable(subNames, true, b)
+				if err != nil {
+					return nil, err
+				}
+				lines = append(append(lines, ""), sub...)
+			}
+			continue
+		}
 		b, err := toBlock(s.value)
 		if err != nil {
 			return nil, err
 		}
-		sub, err := d.renderTable(append(append([]string{}, names...), s.key), false, b)
+		sub, err := d.renderTable(subNames, false, b)
 		if err != nil {
 			return nil, err
 		}

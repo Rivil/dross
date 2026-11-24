@@ -39,6 +39,7 @@ For each task, decide:
 | `covers` | Criterion ids this task delivers (`["c-1", "c-2"]`) |
 | `test_contract` | One or more **specific** statements: "if X breaks, test Y fails". Generic ("tests pass") is rejected. |
 | `depends_on` | Task ids in lower waves. Empty = pure wave-1. |
+| `preconditions` | Any "before X, check Y" gate is a precondition, never prose: `dross task add/edit --precondition '{run = "…", max = N}'`. `task status … in_progress` runs it. |
 | `status` | `pending` |
 
 ### Granularity rules
@@ -90,7 +91,7 @@ There is **no selection step.** Do not ask which areas to discuss, do not presen
 
 ### 2G.3 No areas is an answer
 
-If the decomposition is small, pattern-following, or you're confident on every call, **say so in one line and go straight to §3** — "no gray areas: five tasks, each one file, waves fall out of the dependencies". There is no minimum. A prompt that must produce areas will produce them, and the invented ones are indistinguishable from the real ones until the user has answered a few — which is exactly how a walk meant to catch real uncertainty teaches someone to click through it.
+If the decomposition is small, pattern-following, or you're confident on every call, **say so in one line and go straight to §3** — "no gray areas: five tasks, each one file, waves fall out of the dependencies". There is no minimum: a prompt that must produce areas invents them, and invented ones teach the user to click through the real ones.
 
 Each resolved area feeds the decomposition directly; it is not recorded as a locked decision (those are spec's, and plan does not add to them).
 

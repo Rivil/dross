@@ -5539,3 +5539,111 @@
   line = 100
   reason = "Attribution ceiling, proven per-mutant rather than by category: this is a switch{} case condition in containBasename, so go-cover attributes no block to its columns and gremlins never builds or runs the mutant (reported NOT COVERED, not executed-and-survived). Applying err == nil -> err != nil by hand and running go test ./internal/facts -run ContainCitation turns the suite red: TestContainCitationResolution fails, because a successful ignored-file lookup then falls into the error arm. The test that would catch this breakage already exists and already catches it."
   accepted_in = "spec-fact-drift"
+
+[[accepted]]
+  key = "4f711f97a83c6160"
+  file = "internal/cmd/trust.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case cerr == nil, state == consent.NotApplicable:"
+  line = 308
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "e9999f5225230279"
+  file = "internal/cmd/trust.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case state == consent.Absent, state == consent.Stale:"
+  line = 310
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "dc30db16420572a1"
+  file = "internal/phase/precondition.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case run == \"\":"
+  line = 67
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "0bb8c09314bcb5cb"
+  file = "internal/precond/precond.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case ctx.Err() != nil:"
+  line = 158
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b72f60a77030b11b"
+  file = "internal/precond/precond.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case runErr != nil:"
+  line = 164
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "07008d41437a8283"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !last && isArray && (i != len(o.table)-2 || !addressesElem || len(o.outer) != 1):"
+  line = 695
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "aab06413feac2103"
+  file = "internal/project/patch.go"
+  op = "INVERT_NEGATIVES"
+  text = "case !last && isArray && (i != len(o.table)-2 || !addressesElem || len(o.outer) != 1):"
+  line = 695
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "12d68c3caef0ca26"
+  file = "internal/project/patch.go"
+  op = "ARITHMETIC_BASE"
+  text = "case !last && isArray && (i != len(o.table)-2 || !addressesElem || len(o.outer) != 1):"
+  line = 695
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "352c633ef1800563"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case !last && isArray && o.outer[0] >= n:"
+  line = 698
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "d3380df52f2146cd"
+  file = "internal/project/patch.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case !last && isArray && o.outer[0] >= n:"
+  line = 698
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "b2790b1b242e35a5"
+  file = "internal/project/patch_diff.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kind == kindLeaf:"
+  line = 471
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "a14102f653a7524e"
+  file = "internal/project/patch_diff.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case kind == kindArrayOfTables && !inner && d.keyed(path):"
+  line = 473
+  accepted_in = "task-preconditions"
+  category = "gremlins-attribution-ceiling"
