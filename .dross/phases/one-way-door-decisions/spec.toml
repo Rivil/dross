@@ -44,24 +44,28 @@ new = ["decision.go", "_spec.one-way.md"]
 
 [[decisions]]
   key = "confirmation_record"
+  reversibility = "one-way"
   choice = "`dross phase confirm <phase> <key>` writes `confirmed = <hash of key+choice>` into spec.toml, run only after the user's AskUserQuestion yes."
   why = "Committed and visible in the PR; an edited choice mismatches the hash, so c-8 falls out with no extra mechanism. A local trust grant would be per-machine."
   locked = true
 
 [[decisions]]
   key = "legacy_boundary"
+  reversibility = "reversible"
   choice = "A missing tag is reported only on phases not yet complete; plan-lock checks the phase being locked. An unknown tag value is reported everywhere."
   why = "151 existing specs hold untagged decisions; backfilling them would stamp reversibility claims nobody made."
   locked = true
 
 [[decisions]]
   key = "confirm_turn_placement"
+  reversibility = "reversible"
   choice = "Inline in /dross-spec §3c: right after a gray area resolves to a one-way decision, ask confirm / make reversible / reopen. The verb runs for each yes after §5's write."
   why = "The discussion that produced the decision is still fresh; a late batch confirm drifts toward rubber-stamping."
   locked = true
 
 [[decisions]]
   key = "tag_scope"
+  reversibility = "reversible"
   choice = "Only `locked = true` decisions require a reversibility tag and are subject to the one-way gate."
   why = "Unlocked decisions are already open for plan time to revisit; gating them adds ceremony for no door."
   locked = true

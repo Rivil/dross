@@ -64,7 +64,7 @@ type ReversibilityProblem struct {
 func (p ReversibilityProblem) String() string {
 	want := strings.Join(DoorTags, ", ")
 	if p.Kind == ReversibilityMissing {
-		return fmt.Sprintf("decisions[%d] (%s): reversibility missing — want one of %s", p.Index, p.Key, want)
+		return fmt.Sprintf("decisions[%d] (%s): missing reversibility — want one of %s", p.Index, p.Key, want)
 	}
 	return fmt.Sprintf("decisions[%d] (%s): unknown reversibility %q — want one of %s", p.Index, p.Key, p.Value, want)
 }

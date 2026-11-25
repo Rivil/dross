@@ -156,6 +156,7 @@ func Validate() *cobra.Command {
 						known = unverifiedDeferredIDs(spec)
 					}
 					problems = append(problems, edgeLines(specPath, spec, known)...)
+					problems = append(problems, reversibilityLines(root, id, specPath, spec)...)
 				}
 				// A spec or plan that did not decode is reported above; its ids
 				// are unknown, so the record is not judged against them — that
@@ -699,6 +700,24 @@ func absorbedProblems(root, phaseID, path string, spec *phase.Spec, byID map[str
 		}
 	}
 	return problems
+}
+
+// reversibilityLines reports phaseID's decisions whose reversibility tag is
+// wrong (locked legacy_boundary). A missing tag on a locked decision is
+// reported only while the phase is open — the same completeness predicate
+// absorbedProblems uses — since a complete phase's decisions predate the tag
+// and backfilling them would stamp claims nobody made. An unknown value is
+// reported everywhere. An unconfirmed one-way decision is not a validate
+// problem: refusing it is plan-lock's job.
+func reversibilityLines(root, phaseID, path string, spec *phase.Spec) []string {
+	if len(spec.Decisions) == 0 {
+		return nil
+	}
+	var lines []string
+	for _, p := range phase.ReversibilityProblems(spec, !changes.Complete(root, phaseID)) {
+		lines = append(lines, fmt.Sprintf("%s: %s", path, p))
+	}
+	return lines
 }
 
 // loadIfExists skips missing files quietly.

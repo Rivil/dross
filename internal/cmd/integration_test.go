@@ -107,6 +107,7 @@ key = "token_lib"
 choice = "jose"
 why = "well-maintained, no native deps"
 locked = true
+reversibility = "reversible"
 `)
 
 	// --- status after spec only: should suggest plan ---
