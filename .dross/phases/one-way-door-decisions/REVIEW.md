@@ -4,31 +4,59 @@ Reviewed: 2026-11-25
 Plan: 8 tasks across 3 waves
 
 ## BLOCKING
-- [locked-decision] t-6's gate refuses on an unlocked decision, which contradicts `tag_scope` ("Only `locked = true` decisions … are subject to the one-way gate") and c-9 (plan-lock passes with "only reversible or unlocked ones"). The chain: t-1's contract says "an unlocked decision with an unknown value is reported" by `ReversibilityProblems`, and t-6 refuses whenever `ReversibilityProblems(spec, true)` is non-empty. So a spec whose only decision is unlocked with `reversibility = "oneway"` cannot plan-lock. t-6's c-9 subtest ("only unlocked one-way decisions … lock successfully") uses a valid value, so it misses this case.
-  Suggestion: decide which rule wins. Either the gate considers only locked decisions (validate can still report unlocked unknowns), and t-6 gets a contract line saying "an unlocked decision with `reversibility = \"oneway\"` locks successfully". Or the plan keeps refusing, and the spec's `tag_scope` decision has to be reopened. It cannot stay as written.
+(none)
 
 ## FLAG
-- [wave-order] `dross validate` fails on this phase's own spec from t-2 until t-8. execute.md §1e runs `dross validate` on every task, and r-01 requires `make install` after Go edits. Once t-2 is installed, the four untagged locked decisions in `.dross/phases/one-way-door-decisions/spec.toml` (phase not complete) print four ✗ lines during t-3, t-4, t-5, t-6 and t-7. Tagging needs no new verb, only confirming does, but t-8 bundles both behind t-3 in wave 3.
-  Suggestion: tag the four decisions right after t-2 lands and leave only the confirm step in t-8. If you keep the current order, record in t-2 that this phase's own spec is expected to fail validate until t-8, so the executor doesn't stop to debug it.
-- [test-contract] t-8's contract can pass without testing anything. Its precondition proves the installed binary has `phase confirm` (t-3) but not t-2's validate logic. Wave-2 order is free, so a binary installed after t-3 but before t-2 prints no reversibility ✗ lines at all, and both of t-8's contract lines ("no reversibility ✗ line") pass on a binary that has no reversibility check.
-  Suggestion: add a positive-control precondition that is true only before t-8 tags and only on a current binary, e.g. `{run = "dross validate 2>&1 | grep -c 'missing reversibility'", min = 4}`.
-- [coverage] c-2 says §3 "proposes a reversibility tag for **every** decision". t-5 proposes one only for "every locked decision". `tag_scope` limits which decisions *require* a tag and are *gated*; it does not limit what gets *proposed*. So c-2's literal text is not covered for unlocked decisions.
-  Suggestion: widen t-5's §3c wording and contract to unlocked decisions, or confirm with the user that c-2 means locked decisions and fix the criterion text during the spec pass.
-- [test-contract] `DoorLabel` is undefined for an unlocked one-way decision, and the ship body shows one. `internal/ship/body.go:67-80` prints every decision (🔒 only on locked ones). t-1's four DoorLabel values and t-4's contract cover only locked or untagged cases, so an unlocked `reversibility = "one-way"` decision probably renders `**[one-way, unconfirmed]**`. t-3 refuses to confirm unlocked decisions, so the PR would show a pending confirmation that no command can clear.
-  Suggestion: pin the unlocked case in t-1's DoorLabel contract (e.g. plain `one-way`, or no label) and assert it in t-4's ship-body contract.
-- [test-contract] t-5 never checks the byte size t-7 depends on. t-5's description says it frees ≥ 300 bytes "for this and t-7's fetch line", but its contract only checks the 15,000 cap, while t-7's precondition requires `wc -c` ≤ 14,850. t-5 can pass at 14,9xx, and t-7 then refuses at start, reopening a task already committed.
-  Suggestion: add a t-5 contract line that `assets/prompts/spec.md` ends at ≤ 14,850 bytes. That moves the failure to the task that causes it.
-- [schema] t-1 adds only TOML tags (`reversibility,omitempty`, `confirmed,omitempty`), but every existing `Decision` field also has a `json` tag (`internal/phase/phase.go:351-356`). Without json tags, `dross phase show --json` would print `Reversibility` / `Confirmed` in Go casing, and once consumers read it that is hard to change. No contract covers it.
-  Suggestion: add `json:"reversibility,omitempty"` / `json:"confirmed,omitempty"` to t-1's description and its round-trip contract.
+- [wave-order] t-8's third contract line needs t-6's gate, but t-8 does not depend on t-6. The line says "`dross state set current_phase_status planned` in a scratch copy (or the gate function in-process) reports no unconfirmed one-way key". t-8's `depends_on = ["t-2", "t-3"]`, and t-6 is also in wave 3. If t-8 runs first, `planLockOneWayGate` does not exist yet, and a scratch-copy plan-lock passes whether or not the confirmations landed. That is a vacuous green.
+  Suggestion: either add t-6 to t-8's `depends_on`, which moves t-8 to wave 4, or rewrite that line against `phase.UnconfirmedOneWay` from t-1, which t-8 already has.
+- [test-contract] t-6 filters `ReversibilityProblems` to locked decisions only, but t-1 provides no way to do that cleanly. t-1's API is `ReversibilityProblems(spec, requireTags bool)`, which returns `[]string` lines naming `decisions[i] (<key>)`. That leaves t-6 two options:
+  - Parse the lines as strings.
+  - Run the function on a copy of the spec that holds only the locked decisions. This renumbers the indexes, so the refusal names the wrong `decisions[i]`.
+
+  No contract catches either option. There is also no t-6 line for a **locked** decision with an unknown value (e.g. `"oneway"`) refusing lock. Today's lines cover only "untagged locked refuses" and "unlocked unknown passes".
+  Suggestion: give t-1 a locked-only mode or per-decision results, so the gate shares the one rule set without parsing strings. Then add two t-6 contract lines:
+  - A locked decision with `reversibility = "oneway"` refuses.
+  - A locked untagged decision at index 1, behind an unlocked one at index 0, is named `decisions[1]`.
+- [antipattern] t-2 and t-8 both depend on asking the user, and that breaks under `--solo`. t-2 combines a Go change (validate wiring and its tests) with an AskUserQuestion step: tagging this phase's four locked decisions with values "asked from the user … never guessed". t-8 is entirely user confirmations. Under `--solo`, the task writer is an Edit/Write subagent that cannot ask the user. t-2's tagging step would then either stall or be guessed, and guessing is exactly what the description forbids.
+  Suggestion: if this phase may run solo, say in t-2 that the main loop asks the tag question before it spawns the writer. Otherwise, record that this phase runs in pair mode.
 
 ## NOTE
-- [granularity] t-7 (6 files) and t-3 (5 files) pass the 5-file split threshold, but both stay in one layer, and the extra files are required companion files (the `cli_tree.txt` golden, the README phase row, the partial, `TriggerVocabulary` and its pin test, the interaction-audit row). Splitting them would add tasks without reducing risk.
-- [wave-order] Every wave-3 dependency is real. t-6's c-8 contract runs the actual `dross phase confirm` in-process. t-7 and t-5 both edit `assets/prompts/spec.md` and `internal/cmd/spec_prompt_test.go`. t-8 needs both the verb and t-2's validate. Nothing could move to an earlier wave.
-- [legacy-boundary] Checked against live data: 150 phases have locked decisions. 149 have `changes.json` status `complete`, and the one that doesn't is this phase. `changes.Complete` accepts only `StatusComplete`, so a phase that is `shipped` but not finalized would count as open and get missing-tag reports. No such phase exists today. t-2 reuses the predicate `absorbedProblems` already uses, which keeps the rule in one place.
-- [byte budget] `spec.md` is exactly 14,835 bytes now, so t-5's precondition passes with no margin. Existing `**When** … dross prompt partial spec …` lines run about 90–135 bytes, so t-7's 150-byte margin (14,850 → 15,000) fits one fetch line, with little room for anything else.
-- [strengths] The companion files a guard test checks are listed up front: `not_paths.txt` (TestEveryPathShapedFieldIsDeclared), `cli_tree.txt`, the README `dross phase {…}` row, and the interaction-audit row. This is the gap that cost five asks in milestone-closeout-check, and it is closed here.
-- [strengths] t-1's hash contract is specific: a separator collision pair (`"ab","c"` vs `"a","bc"`), a pinned 64-hex literal, phase id not an input, and the cross-key copied-hash case. A weak or truncated hash would fail at least one line. t-3 adds `scanDrossArtifacts` so committed hashes don't trip the secret self-scan.
-- [strengths] t-8 checks the legacy boundary against the real ~150 complete specs, not just fixtures, and puts its live-run assumptions into preconditions (installed verb present, four locked decisions still there). The positive-control gap is noted above.
+- [prior-review] Every finding from the previous review is resolved in 3689cae8:
+  - t-6 is now locked-only per `tag_scope`, with an unlocked-`"oneway"`-locks contract line.
+  - This phase's own spec is tagged in t-2, so validate stays green through t-3 to t-7.
+  - t-8 has a binary positive-control precondition and now depends on t-2.
+  - t-5 proposes a tag for every decision (c-2).
+  - The `DoorLabel` unlocked case is pinned.
+  - t-5 now has a ≤ 14,850-byte ceiling contract.
+  - t-1 adds JSON tags plus a contract line for them.
+
+  One gap remains: t-4 never checks how the ship body renders an unlocked one-way decision. `internal/ship/body.go:67-80` prints unlocked decisions too, so that rendering is pinned only indirectly, through t-1's `DoorLabel` contract.
+- [live-state] Checked against the live tree today:
+  - `assets/prompts/spec.md` is exactly 14,835 bytes, which equals t-5's `max`, so there is no slack if anything touches the file first.
+  - `dross phase facts one-way-door-decisions` reports nothing unresolved.
+  - `dross validate` is green.
+  - State is `planned`.
+  - The `dross task add/edit` code never sets `current_phase_status`, so t-6's gate will not fire again on this phase during execution.
+- [preconditions] Two of t-8's preconditions are fragile:
+  - `strings $(command -v dross) | grep -q 'missing reversibility'`: if `dross` is not on PATH, `strings` gets no file argument and reads stdin. The precondition then fails late or opaquely instead of naming the missing binary.
+  - `dross phase confirm --help | grep -q 'confirm <phase-id>'`: this depends on t-3's cobra `Use` string, which t-3 does not pin. The `mark-new <phase-id>` convention makes a match likely, but nothing guarantees it.
+- [granularity] t-7 (6 files) and t-3 (5 files) pass the 5-file threshold, but each stays in one layer, and the extra files are companion files a guard test checks (the partial, `TriggerVocabulary` and its pin test, the interaction-audit row, the `cli_tree.txt` golden, the README phase row). Splitting them would add tasks without reducing risk.
+- [strengths] The amendment turned prose gates into enforced preconditions:
+  - t-5 `max = 14835`.
+  - t-7 `max = 14850`.
+  - t-6 requires `phase_confirm.go` to exist.
+  - t-8 checks the verb, the decision count and the binary string.
+
+  So the byte-budget handoff between t-5 and t-7 is now checked at both ends.
+- [strengths] t-1's hash contract is specific:
+  - a separator collision pair
+  - a pinned 64-hex literal
+  - phase id excluded as an input
+  - a hash copied from another key
+  - JSON key casing
+
+  t-3 adds a check that `scanDrossArtifacts` stays silent on committed hashes, which avoids tripping the secret self-scan.
+- [strengths] The legacy boundary is tested on real data (t-8 runs over about 150 complete specs) as well as fixtures. t-2 reuses `changes.Complete`, the same predicate `absorbedProblems` uses, so "complete" has one definition.
 
 ## Summary
-The plan is well structured and has thorough companion files and specific contracts. One conflict with a locked decision (the plan-lock gate refusing on unlocked decisions with unknown values) has to be resolved before execution. The six flags are cheap contract or ordering fixes.
+The amendment fixed the previous blocker and all six flags, and the plan is ready to execute. Three cheap fixes remain: t-8 should depend on t-6 or check against `UnconfirmedOneWay`, t-6 needs a locked-only filter that keeps the true indexes, and the user-ask steps in t-2 and t-8 need a decision on pair versus solo mode.
