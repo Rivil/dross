@@ -111,6 +111,8 @@ Each resolved gray area becomes a locked decision:
 
 An area the user leaves open is skipped (plan time can add it).
 
+**When** `door=one-way` — an area resolves to a one-way decision: `dross prompt partial spec one-way`
+
 ## 4. Deferred ideas
 
 The §3 discussion may already have surfaced deferred ideas (scope-creep redirects, areas the user punted). Fold those in first, then ask once more to catch the rest:
