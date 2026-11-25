@@ -71,8 +71,14 @@ func BuildPRBody(spec *phase.Spec, v *verify.Verify, reviews map[string]changes.
 			if d.Locked {
 				lock = " 🔒"
 			}
-			fmt.Fprintf(&b, "- **%s**%s — %s",
-				d.Key, lock, d.Choice)
+			// The door marker sits in a fixed slot before " — ", so a
+			// choice that merely mentions "one-way" never reads as one.
+			door := ""
+			if label := phase.DoorLabel(d); label != "" {
+				door = " **[" + label + "]**"
+			}
+			fmt.Fprintf(&b, "- **%s**%s%s — %s",
+				d.Key, lock, door, d.Choice)
 			if d.Why != "" {
 				fmt.Fprintf(&b, " *(%s)*", d.Why)
 			}

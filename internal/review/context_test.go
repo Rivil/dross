@@ -280,3 +280,61 @@ func TestContextFenceOutrunsPatch(t *testing.T) {
 		t.Fatalf("a patch with a ``` run was fenced with fewer than four backticks:\n%s", c.Body)
 	}
 }
+
+// decisionLines returns the "## Locked decisions" section's bullet lines.
+func decisionLines(body string) []string {
+	_, rest, ok := strings.Cut(body, "## Locked decisions\n\n")
+	if !ok {
+		return nil
+	}
+	section, _, _ := strings.Cut(rest, "\n\n")
+	return strings.Split(section, "\n")
+}
+
+// TestContextMarksDoors (c-6): locked one-way and reversible decisions carry
+// distinct bracket tokens, a stale confirmation reads unconfirmed, an untagged
+// decision has no bracket, and an unlocked one-way decision stays omitted.
+func TestContextMarksDoors(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "a.go", "package a // edited\n")
+	s := taskScope()
+	s.Decisions = []phase.Decision{
+		{Key: "format", Choice: "TOML", Locked: true, Reversibility: phase.DoorOneWay,
+			Confirmed: phase.DecisionHash("format", "TOML")},
+		{Key: "naming", Choice: "kebab-case", Locked: true, Reversibility: phase.DoorReversible},
+		{Key: "schema", Choice: "v2", Locked: true, Reversibility: phase.DoorOneWay,
+			Confirmed: phase.DecisionHash("schema", "v1")},
+		{Key: "legacy", Choice: "LEGACY-CHOICE", Locked: true},
+		{Key: "open_door", Choice: "UNLOCKED-ONE-WAY", Reversibility: phase.DoorOneWay},
+	}
+	c := build(t, dir, s, Secrets{})
+	got := decisionLines(c.Body)
+	want := []string{
+		"- [one-way] format: TOML",
+		"- [reversible] naming: kebab-case",
+		"- [one-way, unconfirmed] schema: v2",
+		"- legacy: LEGACY-CHOICE",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("locked decisions section:\n got %q\nwant %q", got, want)
+	}
+	if strings.Contains(c.Body, "UNLOCKED-ONE-WAY") || strings.Contains(c.Body, "open_door") {
+		t.Error("an unlocked one-way decision reached the reviewer context")
+	}
+}
+
+// TestContextDigestTracksDoorTag: flipping one decision's tag from reversible
+// to one-way changes the digest, so a pass on one tag never vouches for the
+// other.
+func TestContextDigestTracksDoorTag(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "a.go", "package a // edited\n")
+	s := taskScope()
+	s.Decisions = []phase.Decision{{Key: "format", Choice: "TOML", Locked: true, Reversibility: phase.DoorReversible}}
+	before := build(t, dir, s, Secrets{})
+	s.Decisions[0].Reversibility = phase.DoorOneWay
+	after := build(t, dir, s, Secrets{})
+	if before.Digest == after.Digest {
+		t.Fatal("flipping reversible → one-way left the digest unchanged")
+	}
+}
