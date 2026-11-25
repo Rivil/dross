@@ -126,6 +126,9 @@ func stateSet() *cobra.Command {
 					if err := planLockFactsGate(filepath.Dir(path), s.CurrentPhase); err != nil {
 						return err
 					}
+					if err := planLockOneWayGate(filepath.Dir(path), s.CurrentPhase); err != nil {
+						return err
+					}
 				}
 				s.CurrentPhaseStatus = args[1]
 			default:
@@ -387,6 +390,57 @@ func planLockEdgeGate(root, phaseID string) error {
 	}
 	return fmt.Errorf("plan-lock refused: %s has %d unresolved edge record(s):\n  %s\nresolve each as covered (criterion ids), dismissed (with a reason) or deferred (a [[deferred]] id), then lock again",
 		specPath, len(problems), strings.Join(problems, "\n  "))
+}
+
+// planLockOneWayGate refuses plan-lock while phaseID's spec holds a locked
+// decision with a missing or unknown reversibility tag, or a locked one-way
+// decision with no confirmation matching its current key and choice (c-4, c-8).
+// It reads phase.ReversibilityProblems and phase.UnconfirmedOneWay — the rules
+// validate and `dross phase confirm` share. Only locked decisions are judged
+// (tag_scope): an unknown tag on an unlocked decision is validate's to report
+// and never refuses lock. The phase being locked is never legacy, so a missing
+// tag on it refuses (legacy_boundary).
+//
+// Absence allows, as the other plan-lock gates do: no current phase, or a phase
+// with no spec.toml, has nothing to judge. A spec that does not decode
+// refuses, naming its path.
+func planLockOneWayGate(root, phaseID string) error {
+	if phaseID == "" {
+		return nil
+	}
+	specPath := filepath.Join(phase.Dir(root, phaseID), "spec.toml")
+	if _, err := os.Stat(specPath); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	spec, err := phase.LoadSpec(specPath)
+	if err != nil {
+		return fmt.Errorf("plan-lock refused: %s does not decode: %w", specPath, err)
+	}
+	var lines []string
+	for _, p := range phase.ReversibilityProblems(spec, true) {
+		if p.Locked {
+			lines = append(lines, p.String())
+		}
+	}
+	var keys []string
+	for _, u := range phase.UnconfirmedOneWay(spec) {
+		line := u.Key + ": one-way decision not confirmed"
+		if u.Stale {
+			line = u.Key + ": one-way decision's choice changed since confirmation"
+		}
+		lines = append(lines, line)
+		keys = append(keys, u.Key)
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+	msg := fmt.Sprintf("plan-lock refused: %s has %d locked decision(s) not cleared as a door:\n  %s\nresolve them in /dross-spec: tag each locked decision reversible or one-way",
+		specPath, len(lines), strings.Join(lines, "\n  "))
+	if len(keys) > 0 {
+		msg += fmt.Sprintf(", and after the user's explicit yes on each one-way decision run `dross phase confirm %s <key>` (here: %s)",
+			phaseID, strings.Join(keys, ", "))
+	}
+	return errors.New(msg + "; then lock again")
 }
 
 // planLockFactsGate refuses plan-lock while phaseID's spec or plan cites a
