@@ -1861,6 +1861,46 @@
       "plan_status": "done",
       "board_state": "task-complete"
     },
+    "one-way-door-decisions/t-1": {
+      "issue": "DRO-1192",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-2": {
+      "issue": "DRO-1193",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-3": {
+      "issue": "DRO-1194",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-4": {
+      "issue": "DRO-1195",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-5": {
+      "issue": "DRO-1196",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-6": {
+      "issue": "DRO-1197",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-7": {
+      "issue": "DRO-1198",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "one-way-door-decisions/t-8": {
+      "issue": "DRO-1199",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "project-toml-lossless-writes/t-1": {
       "issue": "DRO-413",
       "plan_status": "done",
