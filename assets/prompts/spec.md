@@ -2,11 +2,11 @@
 
 Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
-**Run this as a conversation, not a broadcast.** Follow the interaction playbook (`_interaction.md`, printed by `dross interaction show` below): walk §2's criteria and §3's gray-areas one at a time via `AskUserQuestion`, and confirm the written `spec.toml` with a one-line summary — never dump orientation, criteria and TOML in one block.
+**Run this as a conversation, not a broadcast.** Follow the interaction playbook (`_interaction.md`, printed by `dross interaction show` below): walk §2's criteria and §3's gray-areas one at a time via `AskUserQuestion`, and confirm the written `spec.toml` with a one-line summary.
 
 ## 0. Pre-flight
 
-1. Run `dross rule show` and `dross interaction show`; treat the rules as MUST-FOLLOW and follow the printed interaction playbook for every turn of this command.
+1. Run `dross rule show` and `dross interaction show`; the rules are MUST-FOLLOW and the playbook governs every turn.
 2. Resolve the target phase from `$ARGUMENTS`:
    - `--new "Phase Title"` → run `dross phase create "<title>"`, capture the new id (`NN-slug`).
    - `<phase-id>` → use it directly when `.dross/phases/<id>/` exists. If it doesn't but `<id>` is an entry in the active milestone's `phases` array, it is an unscaffolded roadmap phase: run `dross phase create "<id>"` (it also checks out `phase/<id>`) and continue. Fail only if it is in neither.
@@ -23,7 +23,7 @@ Clarify what a phase delivers. Produces `.dross/phases/<id>/spec.toml`.
 
 ## 1. Read context
 
-Read these and surface their relevant bits to the user before asking questions:
+Read these and surface the relevant bits before asking:
 
 - `.dross/project.toml` — `goals.core_value`, `goals.non_goals`, `stack.locked`, `runtime.mode`
 - `.dross/milestones/<milestone>.toml` if `state.current_milestone` is set — milestone success criteria + non-goals constrain what this phase should accept
@@ -49,7 +49,7 @@ Tighten each candidate into a one-liner and assign id `c-1`, `c-2`, … — a so
 
 - `AskUserQuestion` per criterion: `accept` / `reword` / `drop`. Freeform only where an item needs real discussion.
 - `accept` — the criterion stands as written. `reword` — keep the idea, user adjusts wording or scope. `drop` — not this phase; if it's really a separate capability, capture it as a deferred idea (§4).
-- Keep each turn to the criterion in hand — don't echo the whole growing list back every time; a short "c-3 added" is enough.
+- Don't echo the growing list back each turn; a short "c-3 added" is enough.
 - Only after the slate is walked, ask once: **"anything missing?"** — a user addition gets the same per-item gate and quality bar.
 
 **Quality bar — push back (within that criterion's turn) if it fails any of these:**
@@ -107,8 +107,9 @@ Each resolved gray area becomes a locked decision:
 - `choice` (the decision)
 - `why` (the reason — short, but real)
 - `locked = true`
+- `reversibility` — propose it for every decision, locked or not: `one-way` for a file/schema format, public CLI surface or new dependency, else `reversible`; the user may override. Locked decisions require it.
 
-An area the user leaves open is skipped (plan time can add it). **Never** mark `locked = true` without a `why`.
+An area the user leaves open is skipped (plan time can add it).
 
 ## 4. Deferred ideas
 
@@ -118,7 +119,7 @@ The §3 discussion may already have surfaced deferred ideas (scope-creep redirec
 
 For each deferred idea capture:
 - `text` (the deferred thing)
-- `why` (optional — usually "premature without X" or "v1.1 not v1.0")
+- `why` (optional)
 
 When resuming/extending an existing spec, **skip any deferred item that already has a target** — it's already routed; don't re-offer it (idempotent, no duplicate routing).
 
@@ -159,6 +160,7 @@ key    = "..."
 choice = "..."
 why    = "..."
 locked = true
+reversibility = "one-way"         # one-way | reversible
 
 [[deferred]]
 id   = "..."                       # dross deferred new-id, when an edge links it
@@ -171,11 +173,11 @@ outcome  = "covered"               # covered | dismissed | deferred
 criteria = ["c-1"]                 # or reason = "..." / deferred = "<id>"
 ```
 
+`confirmed` is written only by `dross phase confirm`, never hand-written; on resume keep it verbatim.
+
 `Write` it to `.dross/phases/<id>/spec.toml`. **Don't paste the TOML back** — every line was agreed in §2–§4. Confirm with a one-line summary asked as one `AskUserQuestion`, never a trailing prose line:
 
 **"Spec written: N criteria, M locked decisions, K deferred — lock it?"** — lead option **lock**, other option **edit \<what>**.
-
-Only surface a specific field if the user asks to see or change it.
 
 **Record what the spec absorbed.** Once `spec.toml` is written, run this for every criterion seeded from a §1 parked item — accepted as written or reworded, both count — where `<source> <idx>` is that item's handle from §1's `dross deferred list --target <id> --json`:
 ```
@@ -212,5 +214,5 @@ When the phase is a new subsystem, has multiple plausible architectures, or look
 - **Never** invent criteria the user didn't explicitly approve. If you propose, say so and ask confirmation before writing.
 - **Gray areas (§3) must be phase-specific and inside the phase boundary.** Generic category labels ("UI", "Behaviour") and new-capability questions ("should we also add search?") are both bugs — the first is lazy, the second is scope creep. Skip areas already settled by `stack.locked` or a prior decision rather than re-asking them.
 - **Never** mark a decision `locked = true` without an explicit `why`. Locked decisions become non-negotiable in the planner.
-- **Always** keep prose to bullet points and short sentences. Don't write paragraphs into TOML strings.
+- **Always** keep prose to bullets and short sentences, never paragraphs in TOML strings.
 - **If the user pushes back on the quality bar** (e.g. "I know it's vague, just write it"), comply but flag the risk once: "noted — vague criteria can pass verify trivially, may want to revisit."

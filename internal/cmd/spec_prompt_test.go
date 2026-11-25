@@ -494,6 +494,73 @@ func TestSpecSchemaExampleDecodes(t *testing.T) {
 	if p := phase.EdgeProblems(&spec, nil); len(p) > 0 {
 		t.Errorf("§5 schema's edge example is unresolved: %v", p)
 	}
+	if p := phase.ReversibilityProblems(&spec, true); len(p) > 0 {
+		t.Errorf("§5 schema's decision example has a reversibility problem: %v", p)
+	}
+	if len(spec.Decisions) == 0 || spec.Decisions[0].Reversibility == "" {
+		t.Error("§5 schema's decision example shows no reversibility tag")
+	}
+}
+
+// TestSpecPromptProposesReversibility (c-2): §3c proposes a reversibility tag
+// for every decision — locked or not — defaulting to one-way for the three
+// door-shaped kinds, reversible otherwise, with the user free to override.
+func TestSpecPromptProposesReversibility(t *testing.T) {
+	sec := normalisePrompt(specSection(t, "### 3c. Capture outcomes"))
+	for _, want := range []string{
+		"reversibility",
+		"every decision, locked or not", // proposed for all, not only locked
+		"one-way for a file/schema format",
+		"public cli surface",
+		"new dependency",
+		"else reversible", // the fallback
+		"the user may override",
+		"locked decisions require it",
+	} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§3c lacks %q", want)
+		}
+	}
+}
+
+// TestSpecPromptConfirmedNeverHandWritten: §5 says `confirmed` comes only from
+// `dross phase confirm` and survives a resume, and its schema example never
+// shows a `confirmed =` line to copy.
+func TestSpecPromptConfirmedNeverHandWritten(t *testing.T) {
+	raw := specSection(t, "## 5. Write spec.toml")
+	sec := normalisePrompt(raw)
+	for _, want := range []string{"confirmed is written only by dross phase confirm", "never hand-written", "keep it verbatim"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§5 lacks %q", want)
+		}
+	}
+	if strings.Contains(raw, "confirmed =") || strings.Contains(raw, "confirmed=") {
+		t.Error("§5 shows a `confirmed =` line to hand-write")
+	}
+}
+
+// specBaseCeiling is the most spec.md's base prose may weigh, leaving the
+// 15,000-byte budget room for the one-way confirm turn's fetch line. Lines
+// fetching a door partial are not base prose and are not counted.
+const specBaseCeiling = 14850
+
+// TestSpecPromptLeavesRoomForDoorFetch: a trim that leaves the door fetch line
+// no room under the byte budget fails here, not later.
+func TestSpecPromptLeavesRoomForDoorFetch(t *testing.T) {
+	raw, err := assets.FS.ReadFile("prompts/spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, line := range strings.SplitAfter(string(raw), "\n") {
+		if strings.HasPrefix(line, "**When** `door=") {
+			continue
+		}
+		n += len(line)
+	}
+	if n > specBaseCeiling {
+		t.Errorf("spec.md base prose is %d bytes, over the %d ceiling that leaves room for the door fetch line", n, specBaseCeiling)
+	}
 }
 
 // TestSpecPromptEdgeCommandsResolve: every `dross deferred new-id` and
