@@ -1,3 +1,5 @@
+new = ["decision.go", "_spec.one-way.md"]
+
 [phase]
   id = "one-way-door-decisions"
   title = "one-way-door-decisions"

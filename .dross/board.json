@@ -46,6 +46,7 @@
     "mutation-diff-scope": "DRO-9",
     "mutation-range-provenance": "DRO-430",
     "mutation-score-truth": "DRO-30",
+    "one-way-door-decisions": "DRO-1191",
     "phase-create-adoption": "DRO-31",
     "plan-gray-area-walkthrough": "DRO-29",
     "project-toml-lossless-writes": "DRO-412",
