@@ -155,6 +155,7 @@ dross phase checkout | use="checkout <phase-id>" short="Switch to phase/<id>, gu
 dross phase complete | use="complete [phase-id]" short="Finalize a phase after squash-merge: ff the reconcile branch, delete phase/<id>"
 dross phase complete flag --base (string) default="" usage="the branch this phase was forked from, when no base is recorded (a pre-check phase, or one created with --no-branch)"
 dross phase complete flag --recover (bool) default="false" noopt="true" usage="on a diverged base (main or milestone/<version>), reset to origin and restore .dross/ in one shot instead of aborting"
+dross phase confirm | use="confirm <phase-id> <key>" short="Record the user's confirmation of a locked one-way decision in a phase's spec"
 dross phase create | use="create <title>" short="Create the next phase directory and switch to phase/<id>"
 dross phase create flag --adopt (bool) default="false" noopt="true" usage="take over a slug that has already been started (refused without this)"
 dross phase create flag --no-branch (bool) default="false" noopt="true" usage="skip creating/checking out the phase/<id> git branch (advanced)"
