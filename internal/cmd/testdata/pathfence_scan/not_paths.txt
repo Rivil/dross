@@ -223,10 +223,12 @@ mutation.strykerMutant.Status status
 mutation.strykerMutant.StatusReason statusreason
 mutation.strykerReport.SchemaVersion schemaversion
 
-# ---- phase — spec and plan ids, the prose the fact check does not scan (decision whys, edge records, deferred items, task reasons, precondition whys), titles, statuses, precondition COMMANDS and timeouts; the scanned prose is in pathfence.Fields()
+# ---- phase — spec and plan ids, the prose the fact check does not scan (decision whys, reversibility tags and confirmation hashes, edge records, deferred items, task reasons, precondition whys), titles, statuses, precondition COMMANDS and timeouts; the scanned prose is in pathfence.Fields()
 phase.Criterion.Deferred deferred
 phase.Criterion.ID id
+phase.Decision.Confirmed confirmed
 phase.Decision.Key key
+phase.Decision.Reversibility reversibility
 phase.Decision.Why why
 phase.Edge.Class class
 phase.Edge.Criteria criteria
