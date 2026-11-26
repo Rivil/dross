@@ -7,7 +7,7 @@ new = ["history.go"]
 
 [[criteria]]
   id = "c-1"
-  text = "Every CI `go test` run on main persists its per-package totals into a timing history that the next CI run (main or PR) reads back."
+  text = "The test job's `go test` run on main persists its per-package totals into a timing history that the next CI run (main or PR) reads back."
   deferred = ["03c01d14d87babd2"]
 
 [[criteria]]
