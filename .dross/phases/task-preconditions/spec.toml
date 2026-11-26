@@ -88,5 +88,6 @@
   criteria = ["c-11"]
 
 [[deferred]]
+  id = "85f437451551a93c"
   text = "Remote precondition execution: a per-precondition opt-in that sends the command to the configured test runner."
   why = "Timing measurements differ laptop vs helicon; local-only is enough until a precondition needs runner hardware."
