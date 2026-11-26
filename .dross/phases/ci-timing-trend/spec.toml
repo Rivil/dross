@@ -1,0 +1,73 @@
+[phase]
+  id = "ci-timing-trend"
+  title = "ci-timing-trend"
+  milestone = "v1.9"
+
+[[criteria]]
+  id = "c-1"
+  text = "Every CI `go test` run on main persists its per-package totals into a timing history that the next CI run (main or PR) reads back."
+  deferred = ["03c01d14d87babd2"]
+
+[[criteria]]
+  id = "c-2"
+  text = "A package whose elapsed time reaches >=90% of its cap (go test's 10m default -> 540s) draws a `::warning` naming the package, its seconds and the cap; the existing 300s budget warning is unchanged."
+
+[[criteria]]
+  id = "c-3"
+  text = "A package still under 90% of its cap draws a separate trend `::warning` when its persisted history shows it heading toward the cap, by decision `trend_rule`; a flat or falling history draws none."
+
+[[criteria]]
+  id = "c-4"
+  text = "The step summary's 'Package totals' table gains a baseline column (from the persisted history) and this run's delta against it."
+
+[[criteria]]
+  id = "c-5"
+  text = "A missing, empty or unparseable timing history (first run, evicted cache) draws no trend warning and a single note line; a package absent from the history shows baseline '—', no delta and no trend warning. The exit code stays the test verdict and nothing else."
+
+[[criteria]]
+  id = "c-6"
+  text = "History entries are keyed by commit SHA: a re-run of the same commit's CI replaces that commit's entry, never adds a second."
+
+[[decisions]]
+  key = "history_store"
+  choice = "Timing history persists via SHA-pinned actions/cache: main runs restore the newest `test-timing-` key and save under `test-timing-<sha>`; PR runs only restore."
+  why = "No token, network call or artifact API in testsummary; PRs can read main's cache; cache eviction is already handled by c-5."
+  locked = true
+  reversibility = "one-way"
+  confirmed = "sha256:d53def0c6d1d79819e3f3e0d55fa869701ce7618ceac6ba85dd7e37c9349bde5"
+
+[[decisions]]
+  key = "trend_rule"
+  choice = "Least-squares line over the last 10 main entries; warn when it reaches 540s within the next 10 runs. Needs >= 5 entries; the history window keeps 20."
+  why = "Catches slow creep long before the wall; ±20% runner noise cannot fake the slope needed from a low baseline."
+  locked = true
+  reversibility = "reversible"
+
+[[decisions]]
+  key = "baseline"
+  choice = "c-4's baseline is the median of the package's history window, not the previous run."
+  why = "One noisy runner must not swing the comparison."
+  locked = true
+  reversibility = "reversible"
+
+[[decisions]]
+  key = "cap_source"
+  choice = "The cap is a 600s constant in cmd/testsummary (go test's default timeout); no flag."
+  why = "ci.yml passes no -timeout (cmd-test-duration's timeout_ceiling) and TestCIGoTestStepsLive already pins that line."
+  locked = true
+  reversibility = "reversible"
+
+[[edges]]
+  class = "empty"
+  outcome = "covered"
+  criteria = ["c-5"]
+
+[[edges]]
+  class = "idempotency"
+  outcome = "covered"
+  criteria = ["c-6"]
+
+[[edges]]
+  class = "boundary"
+  outcome = "covered"
+  criteria = ["c-2", "c-3"]
