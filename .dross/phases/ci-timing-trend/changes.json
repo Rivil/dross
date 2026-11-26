@@ -2,5 +2,150 @@
   "phase": "ci-timing-trend",
   "base": "milestone/v1.9",
   "base_commit": "7d4acc8fdfd462823ad6ec279661f0a0791184fc",
-  "tasks": {}
+  "tasks": {
+    "t-1": {
+      "files": [
+        "cmd/testsummary/history.go",
+        "cmd/testsummary/history_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "614175ca",
+      "completed_at": "2026-11-26T10:45:53.18104Z",
+      "landmarks": [
+        {
+          "feature": "CI test timing trend",
+          "symbol": "history.trend",
+          "loc": "cmd/testsummary/history.go:150",
+          "what": "SHA-keyed 20-run package timing history with median baseline and least-squares cap-trend projection"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "cmd/testsummary/table.go",
+        "cmd/testsummary/table_test.go",
+        "cmd/testsummary/main.go",
+        "cmd/testsummary/main_test.go"
+      ],
+      "commit": "031df792",
+      "completed_at": "2026-11-26T11:01:54.214693Z",
+      "landmarks": [
+        {
+          "feature": "CI test timing trend",
+          "symbol": "capWarnings",
+          "loc": "cmd/testsummary/table.go:89",
+          "what": "cap warning at 90% of go test's 600s wall, else trend warning from the SHA-excluded history; totals table gains median baseline and delta"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        ".github/workflows/ci.yml",
+        "internal/cmd/ci_timing_cache_test.go",
+        "internal/cmd/ci_go_test_step_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "commit": "f5f7e652",
+      "completed_at": "2026-11-26T11:46:15.921131Z",
+      "landmarks": [
+        {
+          "feature": "CI test timing trend",
+          "symbol": "timingCacheProblems",
+          "loc": "internal/cmd/ci_timing_cache_test.go:52",
+          "what": "guards the test job's actions/cache restore/save of the timing history: main-only first-attempt save, one runner.temp path, mutation-ts excluded"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The 'falling above the line' case (600 to 545) projects to about 407 at x=14, so the projection check alone already rejects it and it never reaches the slope \u003e 0 check. Only the flat-at-545 case actually tests that slope check. The contract is still met.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "loadHistory also returns the degraded note for a well-formed file with no entries, and for read errors other than not-found. Both are reported as one note line, not swallowed.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "upsert stores the caller's totals map without copying it, so a caller that changes the map later would change the stored entry. Harmless with the current single use.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "cmd/testsummary/main.go run(): with TESTSUMMARY_HISTORY set but GITHUB_SHA empty (e.g. a local run), totals are upserted under sha \"\" and that entry is the one left out of the baseline and trend; consider skipping the save, or noting it, when GITHUB_SHA is unset",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestRunHistoryUnset shows that no file appears in the working directory, but it cannot show that no read happened. That is fine: in the code the load and save are both inside histPath != \"\" checks",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "run() also upserts and saves on PR runs; per decision history_store, keeping PR results out of the stored history depends on the workflow saving the cache only on main, which this task does not cover",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "criterion": "c-1",
+          "text": "workflowSteps stores with:/env: mapping keys without unquoting them (internal/cmd/ci_go_test_step_test.go:102). The keyLines sweep in timingCacheProblems also matches only a bare `TESTSUMMARY_HISTORY:` prefix (internal/cmd/ci_timing_cache_test.go:487). So a quoted key such as `'TESTSUMMARY_HISTORY': ...` in mutation-ts's step or job env gets past both the step-env check and the job/workflow-env check. It is a rare spelling, but it is a gap in the 'only the test job carries the history' guard.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The mapping reader treats every deeper-indented line as a flat `key: value` pair and silently drops lines with no colon. A block scalar or nested map under with:/env: (for example github-script's `script: |`) would add made-up entries. None of the steps this guard reads use that shape, and keyLines counting raw lines (including inside run: blocks) can only cause false failures, not false passes.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "I could not check offline that actions/cache/restore and actions/cache/save at 55cc8345863c7cc4c66a329aec7e433d2d1c52a9 really are the v6.1.0 tag. TestWorkflowActionsArePinned only checks that the ref and the comment have the right shape.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The supply-chain checklist audit is meant to appear in the task report, not the diff, so this review cannot confirm it was done.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
 }

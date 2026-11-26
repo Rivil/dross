@@ -680,6 +680,21 @@
     "board-task-mirror/t-7": {
       "issue": "DRO-123"
     },
+    "ci-timing-trend/t-1": {
+      "issue": "DRO-1201",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ci-timing-trend/t-2": {
+      "issue": "DRO-1202",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ci-timing-trend/t-3": {
+      "issue": "DRO-1203",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
     "cmd-exec-baseline-drain/t-1": {
       "issue": "DRO-709",
       "plan_status": "done",
