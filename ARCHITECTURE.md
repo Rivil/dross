@@ -164,25 +164,36 @@ _introduced main-branch-protection · 5a574b4_
 
 ### CI pipeline
 
-A newer push to a PR cancels the CI run it supersedes while every main push keeps its own run and verdict (main auto-releases), and every CI `go test` streams `-json` under `pipefail` through `cmd/testsummary` with no `-timeout` — go test's 10m default is the wall and a 300s per-package budget warning surfaces regrowth first; YAML has no mutation adapter, so content guards pin the wiring with a pure checker plus a live sweep.
+A newer push to a PR cancels the CI run it supersedes while every main push keeps its own run and verdict (main auto-releases), and every CI `go test` streams `-json` under `pipefail` through `cmd/testsummary` with no `-timeout` — go test's 10m default is the wall and a 300s per-package budget warning surfaces regrowth first. The test job's run also keeps a timing history across runs through SHA-pinned `actions/cache` (locked `history_store`): every run restores the newest `test-timing-` cache before `go test` — a PR reads main's — and hands the file to testsummary as `TESTSUMMARY_HISTORY`, spelled `${{ runner.temp }}` because `env:`/`with:` never shell-expand `$RUNNER_TEMP`; only a first-attempt main push saves it back under `test-timing-<sha>` (`always()`, since a red run's timings are real, and attempt 1 only, since a cache key is immutable and a re-run's save would collide). mutation-ts's narrow run never carries the history. YAML has no mutation adapter, so content guards pin the wiring with a pure checker plus a live sweep.
 
-- `concurrency` (per-ref PR group, cancel-in-progress on `pull_request` only; the `run_id` arm gives each main push its own group) — `.github/workflows/ci.yml:18`
-- `go test` step (`set -o pipefail; go test -race -count=1 -json ./... | go run ./cmd/testsummary`) — `.github/workflows/ci.yml:78`
+- `concurrency` (per-ref PR group, cancel-in-progress on `pull_request` only; the `run_id` arm gives each main push its own group) — `.github/workflows/ci.yml:22`
+- restore test timing history step (`actions/cache/restore`, key `test-timing-${{ github.sha }}`, restore-keys `test-timing-`) — `.github/workflows/ci.yml:90`
+- `go test` step (`set -o pipefail; go test -race -count=1 -json ./... | go run ./cmd/testsummary`, env `TESTSUMMARY_HISTORY`) — `.github/workflows/ci.yml:97`
+- save test timing history step (`actions/cache/save`, `if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt == 1`) — `.github/workflows/ci.yml:107`
 - `concurrencyProblems` (one top-level block, `ci-` prefix, PR ref arm, `run_id` arm, PR-only cancel; no job-level override) — `internal/cmd/ci_concurrency_test.go:27`
-- `goTestStepProblems` (rejects a go test lacking `-json`, `pipefail` or the testsummary pipe, any `-timeout`, and in the test job any `-short`/`-skip`/`-run` or a lost `-race`/`-count=1`/`./...`) — `internal/cmd/ci_go_test_step_test.go:193`
+- `workflowSteps` (the shared line scanner: a job's steps with their `uses:`, `shell:`, `if:`, `with:`, `env:` and `run:` lines; no YAML dependency) — `internal/cmd/ci_go_test_step_test.go:46`
+- `goTestStepProblems` (rejects a go test lacking `-json`, `pipefail` or the testsummary pipe, any `-timeout`, and in the test job any `-short`/`-skip`/`-run` or a lost `-race`/`-count=1`/`./...`) — `internal/cmd/ci_go_test_step_test.go:230`
+- `timingCacheProblems` (restore before and save after the test job's go test, both keyed `test-timing-<sha>`; the save gated to `always()`, a main push and attempt 1; one `${{ runner.temp }}` path shared by restore, save and `TESTSUMMARY_HISTORY`; no other step, job or workflow env carries the history) — `internal/cmd/ci_timing_cache_test.go:52`
 
-_introduced cmd-test-duration · d443bd9_
+_introduced cmd-test-duration · d443bd9 · extended ci-timing-trend_
 
 ### CI test summary
 
-A stdlib-only reducer turns a `go test -json` stream into a plain go-test log — failed tests' output, timeout panics and build errors kept, passing output dropped — with the test verdict as its exit code, and appends the 20 slowest top-level tests plus per-package totals to `$GITHUB_STEP_SUMMARY` (stdout when unset, for diagnosing a local run), with a non-failing `::warning` per package over 300s.
+A stdlib-only reducer turns a `go test -json` stream into a plain go-test log — failed tests' output, timeout panics and build errors kept, passing output dropped — with the test verdict as its exit code, and appends the 20 slowest top-level tests plus per-package totals to `$GITHUB_STEP_SUMMARY` (stdout when unset, for diagnosing a local run), with a non-failing `::warning` per package over 300s. With `$TESTSUMMARY_HISTORY` set it keeps a JSON timing history of the newest 20 main runs, one entry per `$GITHUB_SHA` — a re-run replaces its commit's entry, never adds a second. The package totals table gains a baseline (the median of the package's history, locked `baseline`) and this run's delta; a package at or over 90% of the 600s cap (go test's default timeout, locked `cap_source`) draws a cap `::warning`, and one under it whose least-squares line over the last 10 entries (at least 5 present) reaches 540s within 10 more runs draws a trend `::warning` (locked `trend_rule`). This run's own SHA is left out of baseline and trend, so a re-run never compares against itself. A missing, empty or unparseable history prints one note line and no trend; a package the history lacks shows baseline `—` and no delta. None of it touches the exit code.
 
-- `run` (stdin → plain log + timing table; the exit code is the test verdict) — `cmd/testsummary/main.go:25`
+- `run` (stdin → plain log + timing table + history; the exit code is the test verdict) — `cmd/testsummary/main.go:36`
 - `reducer.finish` (non-zero on any fail, an empty stream, or a package that never reached a terminal pass/fail/skip) — `cmd/testsummary/stream.go:207`
-- `timingTable` (top-20 top-level tests by elapsed, subtests excluded; package totals from the package event, not a sum of rows) — `cmd/testsummary/table.go:25`
-- `budgetWarnings` (one `::warning` per package over 300s; never changes the exit code) — `cmd/testsummary/table.go:67`
+- `timingTable` (top-20 top-level tests by elapsed, subtests excluded; package totals from the package event, not a sum of rows, beside baseline and delta) — `cmd/testsummary/table.go:27`
+- `budgetWarnings` (one `::warning` per package over 300s; never changes the exit code) — `cmd/testsummary/table.go:73`
+- `capWarnings` (a cap `::warning` at ≥540s, else a trend `::warning` when the history heads there) — `cmd/testsummary/table.go:89`
+- `capSeconds` (600s, go test's default timeout; 90% of it is the warning line) — `cmd/testsummary/history.go:16`
+- `loadHistory` (missing, empty, unparseable or entry-less → empty history plus one note line) — `cmd/testsummary/history.go:51`
+- `saveHistory` (writes the history, creating its directory on a cache miss) — `cmd/testsummary/history.go:76`
+- `history.upsert` (replace a SHA's entry in place, else append and drop past the 20-entry window) — `cmd/testsummary/history.go:93`
+- `history.baseline` (median of the package's window, this run's SHA excluded) — `cmd/testsummary/history.go:133`
+- `history.trend` (least squares over the last 10 entries, ≥5 points, rising and reaching 540s within 10 runs) — `cmd/testsummary/history.go:150`
 
-_introduced cmd-test-duration · 338ed8c_
+_introduced cmd-test-duration · 338ed8c · extended ci-timing-trend_
 
 ### Clean-tree gates
 
@@ -872,7 +883,7 @@ _introduced one-way-door-decisions · 64c7ac60_
 CI fails when any non-test `.go` file under `internal/` outside `internal/cmd` has under 50% statement coverage from its own package's tests — a flat floor with no allowlist (locked `guard_shape`) — because gremlins mutates one package at a time, so code exercised only through another package's tests reads as NOT COVERED and gets accepted away as a ceiling it is not; the fix is package-local tests, never cross-package `-coverpkg` attribution (locked `test_home`).
 
 - `run` (per-package coverprofile → per-file own-package statement coverage; exit 1 below the floor naming each file, exit 2 on vacuous input, the passing summary names the lowest file) — `cmd/coverfloor/floor.go:38`
-- coverage floor step (the CI test job writes a per-package coverprofile and gates on coverfloor) — `.github/workflows/ci.yml:88`
+- coverage floor step (the CI test job writes a per-package coverprofile and gates on coverfloor) — `.github/workflows/ci.yml:120`
 - `ciWiringProblems` (YAML has no mutation adapter, so the step's wiring is pinned against the live ci.yml) — `cmd/coverfloor/ci_wiring_test.go:86`
 - `TestFixtureBelowFloorFailsTheCheck` (self-test: the real toolchain with CI's flags over a below-floor fixture exits 1) — `cmd/coverfloor/fixture_test.go:55`
 - `TestPassingSummaryNamesTheLowestFile` (lowest-file pick, its first-by-path tie, and parse errors' profile line numbers) — `cmd/coverfloor/floor_test.go:92`

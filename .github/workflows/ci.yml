@@ -78,9 +78,38 @@ jobs:
       # before it (decision timeout_ceiling). TestCIGoTestStepsLive pins this
       # line. -coverprofile is plain per-package (no -coverpkg) and feeds the
       # coverage floor step below.
+      #
+      # Timing history (phase ci-timing-trend, locked decision history_store):
+      # testsummary reads per-package totals of past main runs from
+      # TESTSUMMARY_HISTORY for the baseline column and the trend warning, and
+      # writes this run's totals back under $GITHUB_SHA. Every run restores the
+      # newest test-timing- cache (a PR reads main's); only main saves. The
+      # path is spelled `${{ runner.temp }}` in all three places — a literal
+      # $RUNNER_TEMP in env:/with: is never shell-expanded. TestCITimingCacheLive
+      # pins the restore → go test → save wiring.
+      - name: restore test timing history
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/test-timing/history.json
+          key: test-timing-${{ github.sha }}
+          restore-keys: test-timing-
+
       - name: go test
         shell: bash
+        env:
+          TESTSUMMARY_HISTORY: ${{ runner.temp }}/test-timing/history.json
         run: set -o pipefail; go test -race -count=1 -json -coverprofile="$RUNNER_TEMP/cover.out" ./... | go run ./cmd/testsummary
+
+      # always(): a red run's timings are still real timings. Main pushes only,
+      # and first attempts only: a cache key is immutable, so a re-run's save
+      # under the same test-timing-<sha> would collide. One entry per commit
+      # inside the file is testsummary's job: it replaces, never appends (c-6).
+      - name: save test timing history
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/test-timing/history.json
+          key: test-timing-${{ github.sha }}
 
       # Own-package coverage floor: no non-test file under internal/ outside
       # internal/cmd may sit below 50% statement coverage from its OWN package's
