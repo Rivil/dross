@@ -5656,3 +5656,48 @@
   line = 86
   accepted_in = "one-way-door-decisions"
   category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "378c2b2baa6f9392"
+  file = "cmd/testsummary/history.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case err != nil:"
+  line = 59
+  accepted_in = "ci-timing-trend"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "ee81a78d9e3ac983"
+  file = "cmd/testsummary/history.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case len(b) == 0:"
+  line = 61
+  accepted_in = "ci-timing-trend"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "59b5ed47dbfee832"
+  file = "cmd/testsummary/table.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Test != \"\":"
+  line = 93
+  accepted_in = "ci-timing-trend"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "f051576bfbb6ef4d"
+  file = "cmd/testsummary/table.go"
+  op = "CONDITIONALS_BOUNDARY"
+  text = "case r.Elapsed >= capWarnSeconds:"
+  line = 94
+  accepted_in = "ci-timing-trend"
+  category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "c612cba72b940262"
+  file = "cmd/testsummary/table.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case r.Elapsed >= capWarnSeconds:"
+  line = 94
+  accepted_in = "ci-timing-trend"
+  category = "gremlins-attribution-ceiling"
