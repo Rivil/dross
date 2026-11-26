@@ -1,3 +1,5 @@
+new = ["history.go"]
+
 [phase]
   id = "ci-timing-trend"
   title = "ci-timing-trend"

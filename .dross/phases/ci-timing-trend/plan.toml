@@ -1,0 +1,58 @@
+[phase]
+  id = "ci-timing-trend"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add timing history store and trend math"
+  files = ["cmd/testsummary/history.go", "cmd/testsummary/history_test.go"]
+  description = """
+New history.go, stdlib-only (TestStdlibOnly). A JSON history: ordered entries {sha, packages: {pkg: seconds}}, window 20. loadHistory(path) → history + at most one note string for a missing, empty or unparseable file (never an error that reaches the exit code). upsert(sha, totals) replaces an entry with the same sha in place, else appends and trims to the newest 20. saveHistory(path). baseline(pkg) = median of the package's seconds across the window, ok=false when absent (decision baseline). trend(pkg) = least-squares line over the last 10 entries carrying the package; warns when the fit reaches 540s within the next 10 runs; needs >= 5 points (decision trend_rule). Totals recorded = packages ending pass or fail with elapsed > 0; a skip (no test files) package is not recorded.
+"""
+  covers = ["c-1", "c-3", "c-5", "c-6"]
+  test_contract = [
+    "loadHistory on a missing path, a zero-byte file and a file of invalid JSON each returns an empty history and exactly one note — a second note, an error return or a panic fails it",
+    "upsert of the same sha twice leaves one entry holding the second call's totals, at the original position; a different sha appends (c-6)",
+    "a 21st distinct sha evicts the oldest entry — len stays 20 and the first sha is gone",
+    "saveHistory then loadHistory round-trips entries and order equal",
+    "baseline is the median: odd count returns the middle value, even count the mean of the middle two, one outlier does not move it; a package absent from every entry returns ok=false",
+    "trend with 4 rising points returns no warning; with 5+ flat or falling points returns none",
+    "a rising series whose fit reaches 540.0 at run n+10 warns; a series whose fit reaches 539.x at n+10 does not (boundary)",
+    "trend uses only the last 10 entries: a steep rise confined to entries 1-10 of a 20-entry window, followed by 10 flat entries, does not warn",
+    "a skip-action package and a package with elapsed 0 are not recorded into the entry; pass and fail packages are",
+  ]
+  status = "pending"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Add cap/trend warnings, baseline column, history wiring"
+  files = ["cmd/testsummary/table.go", "cmd/testsummary/table_test.go", "cmd/testsummary/main.go", "cmd/testsummary/main_test.go"]
+  description = """
+table.go: capSeconds = 600 constant (decision cap_source); a `::warning title=test cap::` per package with elapsed >= 90% of the cap (540s) naming the package, its seconds and the cap; a separate `::warning title=test trend::` for a package under 540s whose history trend warns. The 300s budget warning is untouched. Package totals table gains Baseline and Delta columns ('—' and empty delta when the package has no history). main.go run(): history is on only when TESTSUMMARY_HISTORY is set — load it (a degraded load prints its one note line), compute warnings and the table from the history as loaded (this run excluded), then upsert this run's totals under GITHUB_SHA and save. Unset → no read, no write, no note, baseline '—' everywhere. The exit code stays the test verdict. Update main.go's doc comment.
+"""
+  covers = ["c-2", "c-3", "c-4", "c-5"]
+  test_contract = [
+    "a package at exactly 540.0s draws one cap ::warning naming the package, '540.0' and the 600s cap; 539.9s draws no cap warning (boundary)",
+    "a 541s package draws both the cap warning and the 300s budget warning, and the budget warning text is byte-identical to today's (existing TestBudgetWarning stays green)",
+    "a package >= 540s whose history also trends upward draws the cap warning and no trend warning; the same history under a 400s package draws the trend warning",
+    "the Package totals header is | Package | Seconds | Baseline | Delta | Result |; a package with history shows its median and a signed delta, one absent from history shows '—' and an empty delta",
+    "run() with TESTSUMMARY_HISTORY pointing at a missing file: exit code matches the verdict, stdout carries exactly one note line, no trend warning, and the file now exists holding this run's totals under GITHUB_SHA",
+    "run() with a corrupt history file: one note line, no trend warning, exit code unchanged versus the same stream with no history (c-5)",
+    "run() run twice with the same GITHUB_SHA leaves one entry in the saved file (c-6 end to end)",
+    "run() with TESTSUMMARY_HISTORY unset writes no file and prints no note line",
+    "a failing stream with a history that would warn still exits 1, and a passing stream with cap + trend warnings still exits 0 — warnings never change the exit code",
+  ]
+  depends_on = ["t-1"]
+  status = "pending"
+
+[[task]]
+  id = "t-3"
+  wave = 3
+  title = "Wire timing cache into CI with guard test"
+  files = [".github/workflows/ci.yml", "internal/cmd/ci_timing_cache_test.go", "ARCHITECTURE.md"]
+  description = "Before editing ci.yml, audit it against the CI supply-chain hardening checklist (global CI-hygiene rule). Test job: an actions/cache/restore step (SHA-pinned, `# vX.Y.Z` comment) before `go test`, key test-timing-${{ github.sha }}, restore-keys test-timing-; the go test step gains env TESTSUMMARY_HISTORY pointing at the cached path; an actions/cache/save step after go test, `if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'`, same path and key (decision history_store). The mutation-ts go test is left without the env. New guard: a pure checker over workflow text plus a live sweep of ci.yml, line-based like ci_go_test_step_test.go. ARCHITECTURE.md: the CI/testsummary entries gain the history, cap and trend behaviour with current file:line refs."
+  covers = ["c-1", "c-6"]
+  test_contract = ["TestCITimingCacheLive fails if the test job has no actions/cache/restore step before go test, or its key is not test-timing-${{ github.sha }} with restore-key test-timing-", "it fails if the save step is missing, runs before go test, lacks always(), or is not gated to a push on refs/heads/main (a PR-saving cache breaks history_store)", "it fails if the go test step's TESTSUMMARY_HISTORY does not equal the restore and save steps' path", "the checker run against synthetic workflows reports each of those breaks separately and passes the wired fixture — the live sweep cannot go green by matching nothing", "TestWorkflowActionsArePinned rejects the new cache steps if either is unpinned or lacks a three-part version comment", "TestCIGoTestStepsLive and TestCoverFloorIsWiredIntoCI stay green with the new steps around go test", "dross architecture check reports no moved or unresolved link for the updated testsummary and CI entries"]
+  depends_on = ["t-2"]
+  status = "pending"

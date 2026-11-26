@@ -15,6 +15,7 @@
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
+    "ci-timing-trend": "DRO-1200",
     "cmd-exec-baseline-drain": "DRO-708",
     "cmd-package-decomposition": "DRO-477",
     "cmd-test-duration": "DRO-634",
