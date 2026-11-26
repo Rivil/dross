@@ -853,6 +853,20 @@ A failed tool invocation is recorded **one way**, by every adapter. The cut is a
 
 _introduced c8b346e · extended 01c10f0 · extended context-hygiene · extended self-audit · de8b076 · extended config-trust-hardening · 266a84d · extended mutation-diff-scope · 16d4426 · extended survivor-drain · 87ba203 · extended multilang-verify-signal · a58de69 · extended cache-budget-prune · 1b777e4 · extended milestone-push-failure-tests · 4f53aa5 · extended remote-run-detach · daf7206 · extended tool-output-not-persisted · 69bfc6e · extended cmd-package-decomposition · 4dad99f · extended test-output-summaries · 311ce9e · extended scoped-commit-gate · 15182445_
 
+### One-way door decisions
+
+Each locked spec decision carries a reversibility tag (`reversible` | `one-way`). `/dross-spec` proposes the tag and gives every one-way decision its own confirm turn. `dross phase confirm` records a key+choice hash, and plan-lock refuses an untagged, unknown or unconfirmed one-way decision, or one whose choice changed since confirmation. Validate reports a missing tag only on open phases. The PR body and the reviewer context mark each door.
+
+- `ReversibilityProblems` / `DecisionHash` / `UnconfirmedOneWay` / `DoorLabel` (one shared rule set for the tag and the confirmation hash, used by validate, the gate, the verb and both renderers) — `internal/phase/decision.go:78`
+- `reversibilityLines` (`dross validate` reports a missing tag on open phases and an unknown tag everywhere) — `internal/cmd/validate.go:712`
+- `phaseConfirm` (`dross phase confirm <phase> <key>` writes `confirmed = <hash>` for one locked one-way decision; idempotent, overwrites a stale hash) — `internal/cmd/phase_confirm.go:31`
+- `planLockOneWayGate` (plan-lock refuses untagged or unknown locked decisions and unconfirmed or stale one-way ones, naming each key) — `internal/cmd/state.go:407`
+- `BuildPRBody` (the "Decisions locked" section marks `[one-way]`, `[one-way, unconfirmed]` or `[reversible]`; the reviewer context does the same at `internal/review/context.go:176`) — `internal/ship/body.go:23`
+- `spec.md` §3c (proposes a tag for every decision: one-way for formats, public CLI surface and new dependencies) — `assets/prompts/spec.md:110`
+- `TriggerVocabulary` (the `door` key fetches `_spec.one-way.md`: one AskUserQuestion per one-way decision: confirm / make reversible / reopen; the verb runs after §5's write) — `assets/partials.go:43`
+
+_introduced one-way-door-decisions · 64c7ac60_
+
 ### Own-package coverage floor
 
 CI fails when any non-test `.go` file under `internal/` outside `internal/cmd` has under 50% statement coverage from its own package's tests — a flat floor with no allowlist (locked `guard_shape`) — because gremlins mutates one package at a time, so code exercised only through another package's tests reads as NOT COVERED and gets accepted away as a ceiling it is not; the fix is package-local tests, never cross-package `-coverpkg` attribution (locked `test_home`).
