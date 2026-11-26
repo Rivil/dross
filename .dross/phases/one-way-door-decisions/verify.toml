@@ -1,0 +1,101 @@
+[verify]
+  phase = "one-way-door-decisions"
+  generated_at = 2026-11-25T20:23:36.789855Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-11-26T06:35:44.383807Z
+  measured_commit = "5f614c7e57fe74c44bcbc8ec65f34e08ac3dfa8b"
+  measured_tree = "974f5f22a04173e4bd00ae2bcaf27d6efc05effc"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.9464627151051626
+  mutants_killed = 495
+  mutants_survived = 28
+  mutants_not_covered = 28
+  mutants_no_block = 25
+  mutants_test_gap = 3
+  mutants_in_scope = 523
+  unclassified_in_scope = 0
+  criteria_total = 9
+  criteria_covered = 9
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 495
+    survived = 28
+    timeout = 0
+    in_scope = 523
+    score = 0.9464627151051626
+    file_count = 19
+    measured_on = "helicon"
+    whole_file = ["assets/partials.go — adapter-lacks-range-runner", "assets/partials_test.go — adapter-lacks-range-runner", "internal/cmd/integration_test.go — adapter-lacks-range-runner", "internal/cmd/phase.go — adapter-lacks-range-runner", "internal/cmd/phase_confirm.go — adapter-lacks-range-runner", "internal/cmd/phase_confirm_test.go — adapter-lacks-range-runner", "internal/cmd/spec_prompt_test.go — adapter-lacks-range-runner", "internal/cmd/state.go — adapter-lacks-range-runner", "internal/cmd/state_oneway_gate_test.go — adapter-lacks-range-runner", "internal/cmd/validate.go — adapter-lacks-range-runner", "internal/cmd/validate_edges_test.go — adapter-lacks-range-runner", "internal/cmd/validate_reversibility_test.go — adapter-lacks-range-runner", "internal/phase/decision.go — adapter-lacks-range-runner", "internal/phase/decision_test.go — adapter-lacks-range-runner", "internal/phase/phase.go — adapter-lacks-range-runner", "internal/review/context.go — adapter-lacks-range-runner", "internal/review/context_test.go — adapter-lacks-range-runner", "internal/ship/body.go — adapter-lacks-range-runner", "internal/ship/body_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/phase/decision_test.go:TestReversibilityProblemsTable", "internal/phase/decision_test.go:TestReversibilityProblemsKinds", "internal/cmd/validate_reversibility_test.go:TestValidateReportsMissingReversibilityOnOpenPhase", "internal/cmd/validate_reversibility_test.go:TestValidateUnknownReversibilityReportedEverywhere"]
+  notes = "tag rules pinned per value; validate ✗ line names spec path, decisions[i] and key; decision.go:86 hand-mutated → 3 tests red"
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["internal/cmd/spec_prompt_test.go:TestSpecPromptProposesReversibility", "internal/cmd/spec_prompt_test.go:TestSpecSchemaExampleDecodes"]
+  notes = "§3c must name all three one-way defaults, reversible fallback, user override, every-decision scope; §5 example must carry a valid tag"
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["internal/cmd/spec_prompt_test.go:TestSpecPromptOneWayConfirmTurn", "internal/cmd/phase_confirm_test.go:TestPhaseConfirmWritesHash", "internal/cmd/spec_prompt_test.go:TestSpecPromptConfirmVerbResolves"]
+  notes = "one AskUserQuestion of exactly confirm / make reversible / reopen, verb only after §5 and per yes; verb writes DecisionHash into spec.toml"
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["internal/cmd/state_oneway_gate_test.go:TestPlanLockRefusesUnconfirmedOneWay", "internal/cmd/state_oneway_gate_test.go:TestPlanLockRefusesUntaggedOrUnknownLocked"]
+  notes = "lock refuses naming both one-way keys, not the reversible one; state.json byte-identical"
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["internal/ship/body_test.go:TestBuildPRBodyMarksDoors"]
+  notes = "exact marker slot per door label; reversible choice containing \"one-way\" carries no one-way token; legacy line byte-identical"
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["internal/review/context_test.go:TestContextMarksDoors", "internal/review/context_test.go:TestContextDigestTracksDoorTag"]
+  notes = "whole locked-decisions section pinned in order; unlocked one-way omitted; tag flip changes digest"
+
+[[criterion]]
+  id = "c-7"
+  status = "covered"
+  tests = ["internal/cmd/validate_reversibility_test.go:TestValidateCompletePhaseLegacyDecisionsPass"]
+  notes = "untagged locked decision under a complete record → ✓; open-phase twin subtests make a predicate swap fail"
+
+[[criterion]]
+  id = "c-8"
+  status = "covered"
+  tests = ["internal/cmd/state_oneway_gate_test.go:TestPlanLockRefusesEditedChoice", "internal/cmd/phase_confirm_test.go:TestPhaseConfirmReconfirmsEditedChoice", "internal/phase/decision_test.go:TestUnconfirmedOneWay"]
+  notes = "edited choice → lock refuses naming only that key as changed; re-confirm clears it"
+
+[[criterion]]
+  id = "c-9"
+  status = "covered"
+  tests = ["internal/cmd/state_oneway_gate_test.go:TestPlanLockOneWayGateAllows"]
+  notes = "four subtests: no decisions, only reversible, only unlocked one-way, unlocked unknown tag — each locks"
+
+[[finding]]
+  severity = "NOTE"
+  text = "gremlins mutant survived: internal/phase/decision.go:86 (CONDITIONALS_NEGATION) — accepted after the run (key 19017565ae9abc86, category gremlins-attribution-ceiling): a switch-case condition go-cover gives no block; applying the negation by hand turns TestReversibilityProblemsTable, TestReversibilityProblemsKinds and TestReversibilityProblemsKeepIndex red. unclassified_in_scope updated 1 → 0 to reflect the accept (user-approved; no re-run)."
+
+[[finding]]
+  severity = "NOTE"
+  text = "25 of 28 in-scope survivors are uncoverable by construction (no go-cover block); efficacy over the 498 reachable mutants = 0.99. All 28 survivors are accepted; 218 out-of-scope survivors filtered."
+
+[[finding]]
+  severity = "NOTE"
+  text = "Solo review (t-1, t-4 FLAG): DoorLabel renders an unknown tag value like an untagged legacy decision in the PR body and reviewer context. Not raised to FLAG here: validate reports an unknown value on every decision and plan-lock refuses it on a locked one."
