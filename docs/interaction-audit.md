@@ -91,6 +91,7 @@ retrofitted under Setup & config in phase 12.)
 | Each acceptance criterion | one criterion per turn, accept/reword/drop | ✅ | one-at-a-time |
 | Gray-area selection | multiSelect AskUserQuestion | ✅ | |
 | Each gray-area deep-dive | one focused exchange per area | ✅ | |
+| One-way decision confirm | one AskUserQuestion per one-way decision, right after its area resolves: confirm / make reversible / reopen | ✅ | `confirm_turn_placement`; `dross phase confirm` runs once per yes, only after §5 writes spec.toml |
 | Lock spec | one-line summary asked as AskUserQuestion, lock/edit | ✅ | never pastes the TOML; never a prose (y / edit) line |
 
 ### dross-plan

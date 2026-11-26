@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -253,7 +255,8 @@ func TestSpecPromptRecordsAbsorbedItems(t *testing.T) {
 // path ("target given, no deferral", no existing spec.toml) fetches nothing,
 // and each moved branch fetches exactly its own partial. Bare /dross-spec
 // (target=empty) and choosing "defer it" (deferral=chosen) each cost one fetch
-// by design. A roadmap id given as the target with no phase dir yet — the
+// by design, as does an area resolving to a one-way decision (door=one-way).
+// A roadmap id given as the target with no phase dir yet — the
 // exact `/dross-spec <id>` verify prints as Next — is target=given too: §0
 // scaffolds it inline, so it fetches nothing, and the target=new trigger's
 // own prose must not claim it (t-19).
@@ -268,6 +271,7 @@ func TestSpecPromptBranchesFetchTheirPartial(t *testing.T) {
 		{"target", "new", "create"},
 		{"spec_file", "present", "resume"},
 		{"deferral", "chosen", "route"},
+		{"door", "one-way", "one-way"},
 	} {
 		facts := assets.CommonPath()
 		if c.key != "" {
@@ -494,6 +498,73 @@ func TestSpecSchemaExampleDecodes(t *testing.T) {
 	if p := phase.EdgeProblems(&spec, nil); len(p) > 0 {
 		t.Errorf("§5 schema's edge example is unresolved: %v", p)
 	}
+	if p := phase.ReversibilityProblems(&spec, true); len(p) > 0 {
+		t.Errorf("§5 schema's decision example has a reversibility problem: %v", p)
+	}
+	if len(spec.Decisions) == 0 || spec.Decisions[0].Reversibility == "" {
+		t.Error("§5 schema's decision example shows no reversibility tag")
+	}
+}
+
+// TestSpecPromptProposesReversibility (c-2): §3c proposes a reversibility tag
+// for every decision — locked or not — defaulting to one-way for the three
+// door-shaped kinds, reversible otherwise, with the user free to override.
+func TestSpecPromptProposesReversibility(t *testing.T) {
+	sec := normalisePrompt(specSection(t, "### 3c. Capture outcomes"))
+	for _, want := range []string{
+		"reversibility",
+		"every decision, locked or not", // proposed for all, not only locked
+		"one-way for a file/schema format",
+		"public cli surface",
+		"new dependency",
+		"else reversible", // the fallback
+		"the user may override",
+		"locked decisions require it",
+	} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§3c lacks %q", want)
+		}
+	}
+}
+
+// TestSpecPromptConfirmedNeverHandWritten: §5 says `confirmed` comes only from
+// `dross phase confirm` and survives a resume, and its schema example never
+// shows a `confirmed =` line to copy.
+func TestSpecPromptConfirmedNeverHandWritten(t *testing.T) {
+	raw := specSection(t, "## 5. Write spec.toml")
+	sec := normalisePrompt(raw)
+	for _, want := range []string{"confirmed is written only by dross phase confirm", "never hand-written", "keep it verbatim"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("§5 lacks %q", want)
+		}
+	}
+	if strings.Contains(raw, "confirmed =") || strings.Contains(raw, "confirmed=") {
+		t.Error("§5 shows a `confirmed =` line to hand-write")
+	}
+}
+
+// specBaseCeiling is the most spec.md's base prose may weigh, leaving the
+// 15,000-byte budget room for the one-way confirm turn's fetch line. Lines
+// fetching a door partial are not base prose and are not counted.
+const specBaseCeiling = 14850
+
+// TestSpecPromptLeavesRoomForDoorFetch: a trim that leaves the door fetch line
+// no room under the byte budget fails here, not later.
+func TestSpecPromptLeavesRoomForDoorFetch(t *testing.T) {
+	raw, err := assets.FS.ReadFile("prompts/spec.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, line := range strings.SplitAfter(string(raw), "\n") {
+		if strings.HasPrefix(line, "**When** `door=") {
+			continue
+		}
+		n += len(line)
+	}
+	if n > specBaseCeiling {
+		t.Errorf("spec.md base prose is %d bytes, over the %d ceiling that leaves room for the door fetch line", n, specBaseCeiling)
+	}
 }
 
 // TestSpecPromptEdgeCommandsResolve: every `dross deferred new-id` and
@@ -515,5 +586,129 @@ func TestSpecPromptEdgeCommandsResolve(t *testing.T) {
 	c, _, _ := root.Find([]string{"phase", "edges"})
 	if c != nil && c.Flags().Lookup("json") == nil {
 		t.Error("spec prompt runs `dross phase edges --json`, which is not a flag")
+	}
+}
+
+// oneWayPartial is the one-way confirm partial as the expanded spec prompt
+// carries it: inlined inside §3c, where the area that resolved one-way was
+// captured.
+func oneWayPartial(t *testing.T) string {
+	t.Helper()
+	b, err := assets.Partial(promptFS, "spec", "one-way")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(specSection(t, "### 3c. Capture outcomes"), string(b)) {
+		t.Fatal("the one-way partial is not inlined in the expanded spec prompt's §3c")
+	}
+	return string(b)
+}
+
+// TestSpecPromptOneWayConfirmTurn (c-3, confirm_turn_placement): a one-way
+// decision gets one AskUserQuestion of exactly confirm / make reversible /
+// reopen, reopen returns to §3b, and the verb runs only after §5 writes
+// spec.toml and only for a yes.
+func TestSpecPromptOneWayConfirmTurn(t *testing.T) {
+	raw := oneWayPartial(t)
+	var options []string
+	for _, line := range strings.Split(raw, "\n") {
+		rest, ok := strings.CutPrefix(line, "- **")
+		if !ok {
+			continue
+		}
+		label, _, _ := strings.Cut(rest, "**")
+		options = append(options, label)
+	}
+	if strings.Join(options, " / ") != "confirm / make reversible / reopen" {
+		t.Errorf("one-way confirm turn offers %q, want exactly confirm / make reversible / reopen", options)
+	}
+	sec := normalisePrompt(raw)
+	if n := strings.Count(sec, "askuserquestion"); n != 1 {
+		t.Errorf("one-way confirm turn names AskUserQuestion %d times, want one", n)
+	}
+	for _, want := range []string{"exactly these options", "never batched", "(lead)", "return to §3b"} {
+		if !strings.Contains(sec, want) {
+			t.Errorf("one-way confirm turn lacks %q", want)
+		}
+	}
+	verb := strings.Index(sec, "dross phase confirm")
+	after := strings.Index(sec, "after §5 writes spec.toml")
+	if verb < 0 || after < 0 || after > verb {
+		t.Fatalf("the confirm verb (at %d) is not preceded by its after-§5 condition (at %d)", verb, after)
+	}
+	gate := sec[after:verb]
+	for _, want := range []string{"never before", "once per yes", "answered confirm and for no other"} {
+		if !strings.Contains(gate, want) {
+			t.Errorf("the confirm verb's condition lacks %q", want)
+		}
+	}
+}
+
+// TestSpecPromptConfirmVerbResolves: every `dross phase confirm` the expanded
+// spec prompt names is the real verb, each with arguments it accepts, and no
+// line shows a `confirmed =` value to hand-write.
+func TestSpecPromptConfirmVerbResolves(t *testing.T) {
+	root := &cobra.Command{Use: "dross"}
+	root.AddCommand(Phase())
+	c, _, err := root.Find([]string{"phase", "confirm"})
+	if err != nil || c.Name() != "confirm" {
+		t.Fatalf("`dross phase confirm` does not resolve: %v", err)
+	}
+	s := expandedPrompt(t, "spec.md")
+	const verb = "dross phase confirm"
+	parts := strings.Split(s, verb)
+	if len(parts) < 2 {
+		t.Fatal("expanded spec prompt never names `dross phase confirm`")
+	}
+	withArgs := 0
+	for _, rest := range parts[1:] {
+		line, _, _ := strings.Cut(rest, "\n")
+		line, _, _ = strings.Cut(line, "`")
+		args := strings.Fields(line)
+		if len(args) == 0 {
+			continue
+		}
+		withArgs++
+		if err := c.Args(c, args); err != nil {
+			t.Errorf("`%s %s` is not a call the verb accepts: %v", verb, strings.Join(args, " "), err)
+		}
+	}
+	if withArgs == 0 {
+		t.Error("expanded spec prompt never shows `dross phase confirm` with its arguments")
+	}
+	if strings.Contains(s, "confirmed =") || strings.Contains(s, "confirmed=") {
+		t.Error("expanded spec prompt shows a `confirmed =` line to hand-write")
+	}
+}
+
+// TestSpecAuditRowsOneWayConfirm: the interaction audit's dross-spec table
+// records the one-way confirm turn as conforming.
+func TestSpecAuditRowsOneWayConfirm(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "docs", "interaction-audit.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(b)
+	i := strings.Index(doc, "\n### dross-spec\n")
+	if i < 0 {
+		t.Fatal("interaction-audit.md has no ### dross-spec section")
+	}
+	section := doc[i+1:]
+	if j := strings.Index(section[1:], "\n### "); j >= 0 {
+		section = section[:j+1]
+	}
+	var row string
+	for _, line := range strings.Split(section, "\n") {
+		if strings.HasPrefix(line, "| One-way") {
+			row = line
+		}
+	}
+	if row == "" {
+		t.Fatal("the dross-spec audit table has no one-way confirm row")
+	}
+	for _, want := range []string{"confirm / make reversible / reopen", "✅", "dross phase confirm"} {
+		if !strings.Contains(row, want) {
+			t.Errorf("the one-way confirm audit row lacks %q: %s", want, row)
+		}
 	}
 }

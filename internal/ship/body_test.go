@@ -247,3 +247,57 @@ func TestReviewSectionClipsAtRuneStart(t *testing.T) {
 		t.Fatal("the clipped body is not valid UTF-8")
 	}
 }
+
+// decisionLine returns the body line rendering decision key, or "".
+func decisionLine(body, key string) string {
+	for _, l := range strings.Split(body, "\n") {
+		if strings.HasPrefix(l, "- **"+key+"**") {
+			return l
+		}
+	}
+	return ""
+}
+
+// markerSlot returns the part of a decision line before " — ": the slot the
+// door marker lives in, kept apart from the free-text choice.
+func markerSlot(line string) string {
+	head, _, _ := strings.Cut(line, " — ")
+	return head
+}
+
+// TestBuildPRBodyMarksDoors (c-5): one-way and reversible decisions carry
+// distinct marker tokens in the fixed slot, a stale confirmation reads
+// unconfirmed, and an untagged legacy decision renders byte-identically.
+func TestBuildPRBodyMarksDoors(t *testing.T) {
+	spec := &phase.Spec{
+		Phase: phase.SpecPhase{ID: "p", Title: "P"},
+		Decisions: []phase.Decision{
+			{Key: "format", Choice: "TOML", Locked: true, Reversibility: phase.DoorOneWay,
+				Confirmed: phase.DecisionHash("format", "TOML")},
+			{Key: "naming", Choice: "kebab-case, not a one-way door", Locked: true, Reversibility: phase.DoorReversible},
+			{Key: "schema", Choice: "v2", Locked: true, Reversibility: phase.DoorOneWay,
+				Confirmed: phase.DecisionHash("schema", "v1")},
+			{Key: "storage", Choice: "drizzle JSON column", Why: "avoids join complexity", Locked: true},
+		},
+	}
+	body := BuildPRBody(spec, nil, nil)
+
+	oneWay := markerSlot(decisionLine(body, "format"))
+	reversible := markerSlot(decisionLine(body, "naming"))
+	stale := markerSlot(decisionLine(body, "schema"))
+	if oneWay != "- **format** 🔒 **[one-way]**" {
+		t.Errorf("one-way slot = %q", oneWay)
+	}
+	if reversible != "- **naming** 🔒 **[reversible]**" {
+		t.Errorf("reversible slot = %q", reversible)
+	}
+	if strings.Contains(reversible, "[one-way") {
+		t.Errorf("a reversible decision whose choice says one-way carries the one-way token in its slot: %q", reversible)
+	}
+	if stale != "- **schema** 🔒 **[one-way, unconfirmed]**" {
+		t.Errorf("stale one-way slot = %q", stale)
+	}
+	if got, want := decisionLine(body, "storage"), "- **storage** 🔒 — drizzle JSON column *(avoids join complexity)*"; got != want {
+		t.Errorf("legacy line changed:\n got %q\nwant %q", got, want)
+	}
+}

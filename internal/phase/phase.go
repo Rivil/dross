@@ -353,7 +353,23 @@ type Decision struct {
 	Choice string `toml:"choice" json:"choice"`
 	Why    string `toml:"why" json:"why"`
 	Locked bool   `toml:"locked,omitempty" json:"locked,omitempty"`
+	// Reversibility tags the decision DoorReversible or DoorOneWay; the rules
+	// over it live in decision.go. omitempty so every spec written before the
+	// tag existed re-saves with no key — a legacy decision stays untagged
+	// rather than stamped with a claim nobody made.
+	Reversibility string `toml:"reversibility,omitempty" json:"reversibility,omitempty"`
+	// Confirmed is DecisionHash(Key, Choice) as it stood when the user
+	// confirmed a one-way decision. An edited choice no longer matches it, so
+	// the confirmation is void until re-confirmed. omitempty: an unconfirmed
+	// decision writes no key.
+	Confirmed string `toml:"confirmed,omitempty" json:"confirmed,omitempty"`
 }
+
+// Decision reversibility tags: the closed set Decision.Reversibility takes.
+const (
+	DoorReversible = "reversible"
+	DoorOneWay     = "one-way"
+)
 
 // Edge is one [[edges]] record: an edge class the spec step proposed and what
 // became of it. Which of the per-outcome fields must be set depends on Outcome

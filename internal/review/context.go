@@ -171,6 +171,12 @@ func renderDecisions(b *strings.Builder, all []phase.Decision) {
 			continue
 		}
 		n++
+		// The door marker sits in a fixed slot before the key; an untagged
+		// legacy decision renders exactly as it did before the tag existed.
+		if label := phase.DoorLabel(d); label != "" {
+			fmt.Fprintf(b, "- [%s] %s: %s\n", label, d.Key, d.Choice)
+			continue
+		}
 		fmt.Fprintf(b, "- %s: %s\n", d.Key, d.Choice)
 	}
 	if n == 0 {

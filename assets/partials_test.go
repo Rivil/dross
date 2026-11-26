@@ -114,6 +114,54 @@ func TestPartialRegistryMissingAndOrphan(t *testing.T) {
 	wantErrContaining(t, CheckPartials(nested), "_execute.solo.md:2", "do not nest")
 }
 
+// embeddedPrompts copies every embedded prompts/ file into a MapFS, so a test
+// can break one real file and see what CheckPartials says about the rest.
+func embeddedPrompts(t *testing.T) fstest.MapFS {
+	t.Helper()
+	files, err := fs.Glob(FS, "prompts/*.md")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no embedded prompts (%v)", err)
+	}
+	m := fstest.MapFS{}
+	for _, f := range files {
+		b, err := fs.ReadFile(FS, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m[f] = &fstest.MapFile{Data: b}
+	}
+	return m
+}
+
+// TestSpecOneWayPartialRegistered: the one-way confirm partial is reached only
+// through spec.md's door=one-way line. Drop that line and the partial is an
+// orphan; misspell its key and the line names no vocabulary trigger.
+func TestSpecOneWayPartialRegistered(t *testing.T) {
+	const door = "**When** `door=one-way`"
+	m := embeddedPrompts(t)
+	if _, ok := m["prompts/_spec.one-way.md"]; !ok {
+		t.Fatal("no prompts/_spec.one-way.md partial")
+	}
+	if err := CheckPartials(m); err != nil {
+		t.Fatalf("embedded prompts break the registry:\n%v", err)
+	}
+	spec := string(m["prompts/spec.md"].Data)
+	var kept []string
+	for _, line := range strings.Split(spec, "\n") {
+		if !strings.HasPrefix(line, door) {
+			kept = append(kept, line)
+		}
+	}
+	if len(kept) == len(strings.Split(spec, "\n")) {
+		t.Fatalf("spec.md has no %s fetch line", door)
+	}
+	m["prompts/spec.md"] = &fstest.MapFile{Data: []byte(strings.Join(kept, "\n"))}
+	wantErrContaining(t, CheckPartials(m), "prompts/_spec.one-way.md: orphan partial")
+
+	m["prompts/spec.md"] = &fstest.MapFile{Data: []byte(strings.Replace(spec, door, "**When** `doors=one-way`", 1))}
+	wantErrContaining(t, CheckPartials(m), `unknown trigger key "doors"`)
+}
+
 func TestFetchLineGrammar(t *testing.T) {
 	for _, c := range []struct{ line, want string }{
 		{"Run `dross prompt partial execute solo` when solo.", "a fetch line must read **When**"},
@@ -139,7 +187,7 @@ func TestCommonPathFetchesNothing(t *testing.T) {
 		"mode=pair", "test_exit=0", "verdict=pass", "leg=attached", "unclassified=zero",
 		"panel=off", "auto=off", "ci=passed", "ship_result=clean", "target=given",
 		"spec_file=absent", "deferral=none", "lanes=unchanged", "remote=unchanged",
-		"closeout=clean", "facts=clean",
+		"closeout=clean", "facts=clean", "door=reversible",
 	} {
 		line := "**When** `" + trig + "` — always: `dross prompt partial execute solo`"
 		_, err := FetchPoints(partialFS("# execute\n"+line+"\n", nil), "execute.md")
@@ -220,7 +268,7 @@ func TestCommonPathVocabularyPinned(t *testing.T) {
 		"panel": "off", "auto": "off", "ci": "passed", "ship_result": "clean",
 		"target": "given", "spec_file": "absent", "deferral": "none",
 		"lanes": "unchanged", "remote": "unchanged", "closeout": "clean",
-		"facts": "clean",
+		"facts": "clean", "door": "reversible",
 	}
 	got := CommonPath()
 	if len(got) != len(want) {

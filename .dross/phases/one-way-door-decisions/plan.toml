@@ -1,0 +1,132 @@
+[phase]
+  id = "one-way-door-decisions"
+
+[[task]]
+  id = "t-1"
+  wave = 1
+  title = "Add decision tag fields and shared rules"
+  files = ["internal/phase/phase.go", "internal/phase/decision.go", "internal/phase/decision_test.go", "internal/cmd/testdata/pathfence_scan/not_paths.txt"]
+  description = "Decision gains Reversibility (toml/json \"reversibility,omitempty\") and Confirmed (toml/json \"confirmed,omitempty\"); consts DoorReversible/DoorOneWay. New decision.go: DecisionHash(key, choice) = \"sha256:\" + full hex of key+\"\\x00\"+choice; ReversibilityProblems(spec, requireTags bool) → []ReversibilityProblem{Index, Key, Locked, Kind (missing|unknown), Value} with a String() rendering `decisions[i] (<key>): …`; UnconfirmedOneWay(spec) → []Unconfirmed{Key, Stale} (locked only); DoorLabel(d) → \"one-way\" | \"one-way, unconfirmed\" (locked only) | \"reversible\" | \"\" (untagged legacy). One rule set shared by validate, the gate, the verb and both renderers. Two not_paths rows."
+  covers = ["c-1", "c-7", "c-8", "c-9"]
+  test_contract = ["DecisionHash(\"ab\",\"c\") != DecisionHash(\"a\",\"bc\") and DecisionHash(\"k\",\"x\") equals a pinned \"sha256:<64 hex>\" literal — a separator-less, re-salted, truncated or unprefixed hash fails one of them", "changing one byte of choice or of key changes the hash; the phase id is not an input (a phase rename keeps the confirmation)", "ReversibilityProblems(spec, true) on a locked decision with reversibility \"\" returns one line naming `decisions[0] (<key>)` as missing; \"One-way\", \"one_way\", \" one-way\" and \"oneway\" each report unknown, quoting the value and listing `reversible, one-way`; neither valid value reports anything", "requireTags=false suppresses missing but still reports an unknown value; an unlocked untagged decision is never reported in either mode; an unlocked decision with an unknown value is reported", "UnconfirmedOneWay: matching hash → empty; empty confirmed → listed with Stale false; hash of the previous choice → listed with Stale true; a Confirmed hash copied from another key with the same choice → listed; reversible, untagged or unlocked one-way → not listed; nil Decisions → empty", "DoorLabel returns the four distinct values for one-way confirmed, one-way stale/empty, reversible and untagged", "a Spec with reversibility+confirmed saves and reloads equal; a legacy Spec saves with neither key in the bytes", "TestEveryPathShapedFieldIsDeclared fails until `phase.Decision.Reversibility reversibility` and `phase.Decision.Confirmed confirmed` are filed in not_paths.txt", "DoorLabel on an unlocked one-way decision with no confirmed hash returns \"one-way\", never \"one-way, unconfirmed\" — no command can confirm an unlocked decision", "json.Marshal of a tagged Decision emits \"reversibility\" and \"confirmed\" keys (lowercase), and omits both for a legacy decision", "each ReversibilityProblem carries the original decisions[] Index, Key and Locked — filtering to Locked keeps the index of the full spec (a re-indexed copy fails this)"]
+  status = "done"
+
+[[task]]
+  id = "t-2"
+  wave = 2
+  title = "Report reversibility problems in dross validate"
+  files = ["internal/cmd/validate.go", "internal/cmd/validate_reversibility_test.go", ".dross/phases/one-way-door-decisions/spec.toml", "internal/phase/decision.go", "internal/cmd/integration_test.go", "internal/cmd/validate_edges_test.go"]
+  description = "In the per-phase walk, append phase.ReversibilityProblems(spec, !changes.Complete(root, id)), each line prefixed with the spec path — the same completeness predicate absorbedProblems uses. An unconfirmed one-way decision is NOT a validate problem (that is the gate's job). In the same task, add `reversibility` to this phase's own 4 locked decisions, values asked from the user via AskUserQuestion (never guessed), so validate stays green from here to t-8."
+  covers = ["c-1", "c-7"]
+  test_contract = ["fixture phase with no completion record and an untagged locked decision → validate exits non-zero with `✗ <specPath>: decisions[0] (<key>): missing reversibility`", "same spec under a changes.json with status complete → \"✓ all dross artefacts valid\" (c-7)", "`reversibility = \"oneway\"` under a complete record is still a ✗ line", "a phase with no changes.json counts as open (missing tag reported) — a predicate swap fails this subtest", "a tagged, unconfirmed one-way locked decision yields no ✗ line", "one untagged decision yields exactly one line (no double report)", "after the build is installed, `dross validate` prints no reversibility ✗ line for .dross/phases/one-way-door-decisions/spec.toml — an own decision left untagged shows up by name"]
+  depends_on = ["t-1"]
+  status = "done"
+
+[[task]]
+  id = "t-3"
+  wave = 2
+  title = "Add dross phase confirm verb"
+  files = ["internal/cmd/phase_confirm.go", "internal/cmd/phase.go", "internal/cmd/phase_confirm_test.go", "cmd/dross/testdata/cli_tree.txt", "README.md"]
+  description = """
+`dross phase confirm <phase-id> <key>` (ExactArgs(2), shaped like phase_mark_new.go): ContainID the phase, load the spec, find the single locked one-way decision named key, write confirmed = phase.DecisionHash(key, choice), Spec.Save. All checks run before the write. Register in Phase(), add the cli_tree golden row and add confirm to the README `dross phase {…}` row.
+"""
+  covers = ["c-3", "c-8"]
+  test_contract = [
+    "on a locked one-way decision, reload shows confirmed == phase.DecisionHash(key, choice), UnconfirmedOneWay is empty, and criteria/edges/deferred/new reload equal",
+    "an unknown key is refused naming it and listing the spec's decision keys; a reversible, untagged or unlocked decision is refused (\"not a locked one-way decision\"); a key matching two decisions is refused as ambiguous; spec.toml bytes are unchanged in every case",
+    "phase id \"../x\" is refused by ContainID before any read; an unknown phase and a missing spec are refused",
+    "re-running on a current confirmation prints \"already confirmed\" and leaves spec.toml byte-identical",
+    "after the choice is hand-edited, confirm overwrites the stale hash with the new one (the c-8 re-confirm path)",
+    "a choice holding backticks, quotes and a multi-line string: the written hash still matches after Save → LoadSpec",
+    "scanDrossArtifacts over a tree holding a confirmed spec returns zero hits",
+    "TestCLITreeGolden fails until cli_tree.txt carries `dross phase confirm`; TestReadmeAdvertisesOnlyRealCommands keeps the README phase row honest",
+  ]
+  depends_on = ["t-1"]
+  status = "done"
+
+[[task]]
+  id = "t-4"
+  wave = 2
+  title = "Mark one-way decisions in PR body and reviewer context"
+  files = ["internal/ship/body.go", "internal/ship/body_test.go", "internal/review/context.go", "internal/review/context_test.go"]
+  description = """
+Both renderers use phase.DoorLabel(d) in a fixed marker slot. Ship "## Decisions locked": `- **key** 🔒 **[one-way]** — choice` / `**[one-way, unconfirmed]**` / `**[reversible]**`. Reviewer renderDecisions: `- [one-way] key: choice` etc. Untagged legacy decisions render exactly as today; unlocked decisions stay omitted from the reviewer context.
+"""
+  covers = ["c-5", "c-6"]
+  test_contract = [
+    "ship body: a one-way and a reversible decision render different marker tokens in the slot before \" — \"; the reversible line does not carry the one-way token",
+    "a reversible decision whose choice text contains \"one-way\" has no [one-way] token in the marker slot",
+    "a one-way decision with a stale confirmed hash renders \"[one-way, unconfirmed]\" in both ship body and reviewer context",
+    "the pinned legacy line \"- **storage** 🔒 — drizzle JSON column *(avoids join complexity)*\" is byte-identical",
+    "reviewer context: one-way and reversible locked decisions render distinct bracket tokens; untagged renders \"- key: choice\" with no bracket; an unlocked one-way decision still does not appear",
+    "flipping one decision's tag from reversible to one-way changes Context.Digest",
+  ]
+  depends_on = ["t-1"]
+  status = "done"
+
+[[task]]
+  id = "t-5"
+  wave = 2
+  title = "Propose reversibility in /dross-spec §3c and §5"
+  files = ["assets/prompts/spec.md", "internal/cmd/spec_prompt_test.go"]
+  description = "§3c: every decision (locked or not) gets a proposed tag — one-way by default for file/schema formats, public CLI surface and new dependencies, reversible otherwise; the user may override. Only locked decisions require one. §5 schema example shows `reversibility = \"one-way\"` plus a prose note that `confirmed` is written only by `dross phase confirm` and kept verbatim on resume. Tighten existing base prose to free ≥ 300 bytes for this and t-7's fetch line, dropping no conservation-manifest row."
+  covers = ["c-2"]
+  test_contract = ["TestPromptByteBudget's spec.md subtest fails if spec.md exceeds 15,000 bytes", "a spec prompt test fails unless the expanded §3c names all three one-way defaults (file/schema format, public CLI surface, new dependency), the reversible fallback and the user override", "TestSpecSchemaExampleDecodes fails if the §5 example carries a key phase.Spec does not read, or if ReversibilityProblems(spec, true) over it is non-empty", "a test fails unless §5 states `confirmed` is never hand-written, and the §5 example carries no `confirmed =` line", "TestPromptInstructionsConserved fails if the trim drops a manifest row", "after t-5, `wc -c < assets/prompts/spec.md` is ≤ 14,850 — a trim that leaves t-7 no room for its fetch line fails a spec prompt test pinning that ceiling", "a spec prompt test fails unless §3c says the tag is proposed for every decision, not only locked ones (c-2)"]
+  depends_on = ["t-1"]
+  status = "done"
+
+  [[task.preconditions]]
+    run = "wc -c < assets/prompts/spec.md"
+    max = 14835
+
+[[task]]
+  id = "t-6"
+  wave = 3
+  title = "Add one-way gate to plan-lock"
+  files = ["internal/cmd/state.go", "internal/cmd/state_oneway_gate_test.go"]
+  description = "planLockOneWayGate(root, phaseID) runs after planLockEdgeGate and planLockFactsGate, before CurrentPhaseStatus is written. No phase / no spec.toml → pass; undecodable spec → refuse naming the path. Filters ReversibilityProblems(spec, true) to Locked entries (tag_scope); those, or any UnconfirmedOneWay → refuse listing every key (stale ones marked \"choice changed since confirmation\"), routing to /dross-spec, with `dross phase confirm <phase> <key>` run only after an explicit yes. Unknown tags on unlocked decisions are validate-only and never refuse lock."
+  covers = ["c-4", "c-8", "c-9"]
+  test_contract = ["two unconfirmed one-way keys → `state set current_phase_status planned` errors naming both keys, and state.json is byte-identical afterwards", "after `dross phase confirm` (the real verb, in-process) on both keys, plan-lock passes", "confirm, then edit one decision's choice in spec.toml → lock refuses naming only that key as changed; confirm again → lock succeeds (c-8)", "no [[decisions]], only reversible, and only unlocked one-way decisions each lock successfully, one subtest each (c-9)", "an untagged locked decision on the phase being locked refuses, naming it (legacy_boundary)", "no current phase or no spec.toml → passes; undecodable spec → refuses naming the path", "the refusal text names \"/dross-spec\" and the exact `dross phase confirm` form; TestNarratedCommandsResolveAgainstTheTree fails if the verb is not registered", "setting any status other than \"planned\" never runs the gate", "an unlocked decision with reversibility = \"oneway\" (and no other problem) locks successfully — a gate that refuses on unlocked decisions fails this subtest (tag_scope, c-9)", "a locked decision with reversibility = \"oneway\" refuses lock, naming its key and original decisions[i] index"]
+  depends_on = ["t-1", "t-3"]
+  status = "done"
+
+  [[task.preconditions]]
+    run = "test -f internal/cmd/phase_confirm.go"
+
+[[task]]
+  id = "t-7"
+  wave = 3
+  title = "Add one-way confirm turn partial"
+  files = ["assets/prompts/spec.md", "assets/prompts/_spec.one-way.md", "assets/partials.go", "assets/partials_test.go", "internal/cmd/spec_prompt_test.go", "docs/interaction-audit.md"]
+  description = """
+New trigger key `door: {reversible, one-way}` in TriggerVocabulary (common value reversible); TestCommonPathVocabularyPinned updated. §3c gains the When line `door=one-way` → `dross prompt partial spec one-way`. The partial: right after an area resolves one-way, one AskUserQuestion — confirm / make reversible / reopen (reopen returns to §3b); after §5's write, run `dross phase confirm <phase-id> <key>` once per yes. Add an interaction-audit row for the turn.
+"""
+  covers = ["c-3"]
+  test_contract = ["TestSpecPromptBranchesFetchTheirPartial gains {\"door\",\"one-way\"} → [\"one-way\"]; TestCommonPathFetchesNothing still passes", "TestCommonPathVocabularyPinned fails unless \"door\" is pinned with common value \"reversible\"", "CheckPartials fails on an orphan _spec.one-way.md or an unknown trigger key", "the expanded partial offers exactly confirm / make reversible / reopen as one AskUserQuestion, and runs the verb only after §5 writes spec.toml and only on a yes", "every `dross phase confirm` in the expanded prompt resolves in Phase(), and the prompt never shows a `confirmed =` line to hand-write", "docs/interaction-audit.md's `### dross-spec` table has a one-way confirm row, asserted in spec_prompt_test", "TestPromptByteBudget's spec.md subtest still passes (≤ 15,000 bytes) with the fetch line added"]
+  depends_on = ["t-3", "t-5"]
+  status = "done"
+
+  [[task.preconditions]]
+    run = "wc -c < assets/prompts/spec.md"
+    max = 14850
+
+[[task]]
+  id = "t-8"
+  wave = 4
+  title = "Confirm own one-way decisions; validate live tree"
+  files = [".dross/phases/one-way-door-decisions/spec.toml"]
+  description = "This spec's decisions were tagged in t-2. For each locked one-way decision, ask the user via AskUserQuestion, run `dross phase confirm one-way-door-decisions <key>` per yes, then run the installed `dross validate` over the live tree."
+  covers = ["c-1", "c-7"]
+  test_contract = ["installed `dross validate` prints no reversibility ✗ line for this phase's spec — a decision whose tag was lost on a rewrite shows up by name", "the same run prints no reversibility ✗ line for any of the ~150 complete phase specs — a legacy-boundary regression on real data shows up even if t-2's fixtures passed", "after the confirmations, `dross state set current_phase_status planned` in a scratch copy (or the gate function in-process) reports no unconfirmed one-way key for this spec"]
+  depends_on = ["t-2", "t-3", "t-6"]
+  status = "done"
+
+  [[task.preconditions]]
+    run = "dross phase confirm --help | grep -q 'confirm <phase-id>'"
+
+  [[task.preconditions]]
+    run = "grep -c 'locked = true' .dross/phases/one-way-door-decisions/spec.toml"
+    min = 4
+
+  [[task.preconditions]]
+    run = "strings $(command -v dross) | grep -q 'missing reversibility'"

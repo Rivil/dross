@@ -1,0 +1,322 @@
+{
+  "phase": "one-way-door-decisions",
+  "pr": 240,
+  "base": "milestone/v1.9",
+  "base_commit": "f1a7a40d8c09c2138ad1d14b8aa26fe9403a348a",
+  "status": "shipped",
+  "tasks": {
+    "t-1": {
+      "files": [
+        "internal/phase/phase.go",
+        "internal/phase/decision.go",
+        "internal/phase/decision_test.go",
+        "internal/cmd/testdata/pathfence_scan/not_paths.txt"
+      ],
+      "commit": "bdb09cc8",
+      "completed_at": "2026-11-25T08:44:31.162465Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "ReversibilityProblems",
+          "loc": "internal/phase/decision.go:78",
+          "what": "reversibility tag + confirmation hash rules shared by validate, plan-lock gate, confirm verb and renderers"
+        }
+      ]
+    },
+    "t-2": {
+      "files": [
+        "internal/cmd/validate.go",
+        "internal/cmd/validate_reversibility_test.go",
+        "internal/phase/decision.go",
+        "internal/cmd/integration_test.go",
+        "internal/cmd/validate_edges_test.go",
+        ".dross/phases/one-way-door-decisions/spec.toml"
+      ],
+      "commit": "ddf4d5ce",
+      "completed_at": "2026-11-25T13:35:29.885283Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "reversibilityLines",
+          "loc": "internal/cmd/validate.go:712",
+          "what": "validate reports missing tags on open phases and unknown tags everywhere"
+        }
+      ]
+    },
+    "t-3": {
+      "files": [
+        "internal/cmd/phase_confirm.go",
+        "internal/cmd/phase.go",
+        "internal/cmd/phase_confirm_test.go",
+        "cmd/dross/testdata/cli_tree.txt",
+        "README.md"
+      ],
+      "commit": "6e606102",
+      "completed_at": "2026-11-25T14:01:10.830631Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "phaseConfirm",
+          "loc": "internal/cmd/phase_confirm.go:31",
+          "what": "dross phase confirm writes the key+choice hash for a locked one-way decision"
+        }
+      ]
+    },
+    "t-4": {
+      "files": [
+        "internal/ship/body.go",
+        "internal/ship/body_test.go",
+        "internal/review/context.go",
+        "internal/review/context_test.go"
+      ],
+      "commit": "d86ce72d",
+      "completed_at": "2026-11-25T14:05:43.663559Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "BuildPRBody",
+          "loc": "internal/ship/body.go:23",
+          "what": "PR body and reviewer context mark each locked decision one-way / one-way unconfirmed / reversible via DoorLabel"
+        }
+      ]
+    },
+    "t-5": {
+      "files": [
+        "assets/prompts/spec.md",
+        "internal/cmd/spec_prompt_test.go"
+      ],
+      "commit": "48ebd914",
+      "completed_at": "2026-11-25T14:11:58.523701Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "dross-spec §3c",
+          "loc": "assets/prompts/spec.md:110",
+          "what": "spec proposes a reversibility tag for every decision with one-way defaults for formats, CLI surface and new deps"
+        }
+      ]
+    },
+    "t-6": {
+      "files": [
+        "internal/cmd/state.go",
+        "internal/cmd/state_oneway_gate_test.go"
+      ],
+      "commit": "0115ea72",
+      "completed_at": "2026-11-25T14:17:10.379092Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "planLockOneWayGate",
+          "loc": "internal/cmd/state.go:407",
+          "what": "plan-lock refuses untagged/unknown locked decisions and unconfirmed or stale one-way ones, naming each key"
+        }
+      ]
+    },
+    "t-7": {
+      "files": [
+        "assets/prompts/spec.md",
+        "assets/prompts/_spec.one-way.md",
+        "assets/partials.go",
+        "assets/partials_test.go",
+        "internal/cmd/spec_prompt_test.go",
+        "docs/interaction-audit.md"
+      ],
+      "commit": "64c7ac60",
+      "completed_at": "2026-11-25T14:41:49.721Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "TriggerVocabulary door",
+          "loc": "assets/partials.go:66",
+          "what": "/dross-spec asks confirm / make reversible / reopen per one-way decision and runs dross phase confirm after §5's write"
+        }
+      ]
+    },
+    "t-8": {
+      "files": [
+        ".dross/phases/one-way-door-decisions/spec.toml"
+      ],
+      "commit": "8c033dd6",
+      "completed_at": "2026-11-25T16:26:12.395206Z",
+      "landmarks": [
+        {
+          "feature": "one-way door decisions",
+          "symbol": "confirmation_record",
+          "loc": ".dross/phases/one-way-door-decisions/spec.toml:51",
+          "what": "phase's own one-way decision confirmed via dross phase confirm; live tree validates clean"
+        }
+      ]
+    }
+  },
+  "reviews": {
+    "t-1": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "DoorLabel (internal/phase/decision.go:132-145) default arm returns \"\" for unknown tag values such as \"One-way\" or \"oneway\" as well as for untagged decisions; a renderer can't tell an unknown tag from a legacy one. The comment says ReversibilityProblems reports these instead, and the record asks for \"\" on untagged, so this does not block.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "ReversibilityProblem.String treats any Kind other than ReversibilityMissing as unknown. Kind is only set inside ReversibilityProblems, so this is safe today, but a hand-built problem with an empty Kind would show as unknown.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The pinned DecisionHash(\"k\",\"x\") literal and the DeepEqual save/reload of a Spec were read, not run; they depend on the test run that passes this gate.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-2": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "criterion": "c-1",
+          "text": "The test_contract line requiring that the installed `dross validate` print no reversibility ✗ line for .dross/phases/one-way-door-decisions/spec.toml cannot be checked here: that spec.toml edit is .dross/ bookkeeping, left out of the diff and outside what the reviewer may read. git status shows the file modified.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "changes.Complete (internal/changes/changes.go:454, not touched by this diff) returns false when changes.json fails to load, so an unreadable record counts as open and its untagged locked decisions are reported. That leans strict, which is the safe side.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The len(spec.Decisions)==0 early return in reversibilityLines does nothing: ReversibilityProblems already returns nil for a spec with no decisions.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-3": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestReadmePhaseRowListsConfirm partly overlaps the existing TestReadmeAdvertisesOnlyRealCommands guard, but it adds the check that the README lists confirm, which that guard cannot catch",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "loadConfirmSpec runs os.Stat before LoadSpec only to give a clearer missing-spec message that still matches fs.ErrNotExist; the extra system call is harmless",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-4": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "FLAG",
+          "text": "An unknown reversibility value (anything other than \"one-way\"/\"reversible\") makes phase.DoorLabel return \"\" (default arm, internal/phase/decision.go:142, from an earlier commit). So internal/ship/body.go:77 and internal/review/context.go:176 render it exactly like an untagged legacy decision, with no marker. This relies on dross validate reporting unknown tags everywhere (locked decision legacy_boundary), and no test covers it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "The ship body also renders unlocked decisions. An unlocked one-way decision there gets a \"[one-way]\" marker with no lock icon. That fits DoorLabel's semantics, and the task record makes no claim about it.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestContextMarksDoors compares the whole Locked decisions section in order, so the untagged line \"- legacy: LEGACY-CHOICE\" is pinned exactly, with no bracket.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-5": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSpecPromptLeavesRoomForDoorFetch skips lines starting with \"**When** `door=\" when counting bytes, so after t-7 it pins the prompt's own text rather than the full `wc -c`. That matches its comment and keeps the test valid after t-7, but the check equals `wc -c \u003c= 14,850` only while no such line exists.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "My rough count puts spec.md near the 14,850-byte ceiling, but I could not measure it in review. The test enforces the limit.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-6": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "internal/cmd/state.go planLockOneWayGate: an os.Stat error other than ErrNotExist (e.g. permission denied) is handed to LoadSpec, so the refusal says the spec 'does not decode' when it really couldn't be read. Lock is still refused, so this is only misleading wording.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestPlanLockOneWayGateScopedToPlanned only tries four non-planned statuses. That's enough, because the gate runs only when the value equals the literal \"planned\" and current_phase_status takes any value.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    },
+    "t-7": {
+      "outcome": "pass",
+      "rounds": 1,
+      "findings": [
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSpecOneWayPartialRegistered makes its CheckPartials claims against a copy of the real embedded prompts with one line broken (orphan partial, unknown key \"doors\"), not a synthetic fixture. This is a strong test.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "assets/partials.go: the closeout/facts lines only change whitespace, from gofmt realigning them when the door entry was added.",
+          "resolution": "non-blocking, left"
+        },
+        {
+          "round": 1,
+          "kind": "quality",
+          "severity": "NOTE",
+          "text": "TestSpecPromptConfirmVerbResolves skips every `dross phase confirm` mention that has no arguments (e.g. §5's backticked mention). It still requires at least one mention with arguments, so the check is not vacuous.",
+          "resolution": "non-blocking, left"
+        }
+      ]
+    }
+  }
+}

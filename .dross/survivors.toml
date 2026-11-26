@@ -5647,3 +5647,12 @@
   line = 473
   accepted_in = "task-preconditions"
   category = "gremlins-attribution-ceiling"
+
+[[accepted]]
+  key = "19017565ae9abc86"
+  file = "internal/phase/decision.go"
+  op = "CONDITIONALS_NEGATION"
+  text = "case d.Reversibility == \"\":"
+  line = 86
+  accepted_in = "one-way-door-decisions"
+  category = "gremlins-attribution-ceiling"

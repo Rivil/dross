@@ -183,7 +183,9 @@ func TestValidateUndecodableSpecHasNoEdgeNoise(t *testing.T) {
 }
 
 // TestValidateLegacySpecStillValid (c-5): a spec written before [[edges]]
-// existed — copied from the real self-audit spec — passes untouched.
+// existed — copied from the real self-audit spec — passes untouched. Like the
+// real one it belongs to a complete phase, whose untagged decisions predate
+// the reversibility tag (one-way-door-decisions c-7).
 func TestValidateLegacySpecStillValid(t *testing.T) {
 	dir := edgeRepo(t)
 	phaseDir := filepath.Join(dir, ".dross", "phases", "self-audit")
@@ -225,6 +227,7 @@ func TestValidateLegacySpecStillValid(t *testing.T) {
   covers = ["c-1", "c-2"]
   status = "pending"
 `)
+	mustWrite(t, filepath.Join(phaseDir, "changes.json"), `{"phase":"self-audit","status":"complete","tasks":{}}`)
 	out, err := validateOut(t)
 	if err != nil {
 		t.Fatalf("legacy spec refused: %v\n%s", err, out)

@@ -61,8 +61,9 @@ var TriggerVocabulary = map[string][]string{
 	"deferral":    {"none", "chosen"},
 	"lanes":       {"unchanged", "editing"},
 	"remote":      {"unchanged", "changing"},
-	"closeout":    {"clean", "unresolved"}, // unresolved: `milestone complete --check` exited non-zero
-	"facts":       {"clean", "unresolved"}, // unresolved: `dross phase facts` exited non-zero
+	"closeout":    {"clean", "unresolved"},   // unresolved: `milestone complete --check` exited non-zero
+	"facts":       {"clean", "unresolved"},   // unresolved: `dross phase facts` exited non-zero
+	"door":        {"reversible", "one-way"}, // one-way: a /dross-spec area resolved to a locked one-way decision
 }
 
 // alwaysWholeFile names gremlins' always-whole-file path. A trigger naming it
