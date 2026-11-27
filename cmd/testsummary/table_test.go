@@ -99,7 +99,7 @@ func TestPackageTotals(t *testing.T) {
 		timed("pass", pkg, "", 10)
 	out, _ := reduce(t, stream)
 	rows := tableRows(t, out, "Package totals")
-	if len(rows) != 1 || rows[0][0] != pkg || seconds(t, rows[0][1]) != 10 || rows[0][2] != "pass" {
+	if len(rows) != 1 || rows[0][0] != pkg || seconds(t, rows[0][1]) != 10 || rows[0][4] != "pass" {
 		t.Fatalf("package totals = %v, want one %s row at 10s (the package event), not 3s (the test sum)", rows, pkg)
 	}
 }
@@ -150,7 +150,7 @@ func TestTableRendersTimedOutRun(t *testing.T) {
 		t.Errorf("exit = %d, want 1", code)
 	}
 	pkgs := tableRows(t, out, "Package totals")
-	if len(pkgs) != 1 || pkgs[0][0] != fixtureModule+"/hang" || pkgs[0][2] != "FAIL" || seconds(t, pkgs[0][1]) < 1 {
+	if len(pkgs) != 1 || pkgs[0][0] != fixtureModule+"/hang" || pkgs[0][4] != "FAIL" || seconds(t, pkgs[0][1]) < 1 {
 		t.Errorf("package totals = %v, want hang FAIL at >= 1s (its -timeout)", pkgs)
 	}
 	byName := map[string][]string{}
@@ -224,4 +224,107 @@ func TestSummaryDestination(t *testing.T) {
 			t.Errorf("no table on stdout:\n%s", out)
 		}
 	})
+}
+
+// warningsTitled is the ::warning lines in out with the given title.
+func warningsTitled(out, title string) []string {
+	var ws []string
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, "::warning title="+title+"::") {
+			ws = append(ws, l)
+		}
+	}
+	return ws
+}
+
+// pkgStream is one passing package at s seconds.
+func pkgStream(pkg string, s float64) string {
+	return timed("start", pkg, "", 0) + timed("pass", pkg, "TestA", 1) + timed("pass", pkg, "", s)
+}
+
+// TestCapWarning (c-2, decision cap_source): a package at or over 90% of the
+// 600s cap draws one cap warning; the 300s budget warning is unchanged.
+func TestCapWarning(t *testing.T) {
+	out, _ := reduce(t, pkgStream("example.com/edge", 540.0))
+	ws := warningsTitled(out, "test cap")
+	if len(ws) != 1 || !strings.Contains(ws[0], "example.com/edge") || !strings.Contains(ws[0], "540.0") || !strings.Contains(ws[0], "600s") {
+		t.Errorf("a package at exactly 540.0s: want one cap warning naming it, 540.0 and the 600s cap, got %q", ws)
+	}
+
+	out, _ = reduce(t, pkgStream("example.com/under", 539.9))
+	if ws := warningsTitled(out, "test cap"); len(ws) != 0 {
+		t.Errorf("a package at 539.9s drew a cap warning: %q", ws)
+	}
+
+	out, code := reduce(t, pkgStream("example.com/big", 541))
+	if code != 0 {
+		t.Errorf("exit = %d for an all-pass stream over the cap line, want 0", code)
+	}
+	if ws := warningsTitled(out, "test cap"); len(ws) != 1 {
+		t.Errorf("a 541s package: want one cap warning, got %q", ws)
+	}
+	budget := warningsTitled(out, "test budget")
+	if want := "::warning title=test budget::example.com/big took 541.0s, over the 300s per-package budget"; len(budget) != 1 || budget[0] != want {
+		t.Errorf("budget warning = %q, want exactly %q", budget, want)
+	}
+	if capSeconds != 600 {
+		t.Errorf("capSeconds = %d, want 600 (go test's default timeout)", capSeconds)
+	}
+}
+
+// TestTrendWarning (c-3): a package under the cap line whose history trends
+// toward it draws a trend warning; one already at the line draws the cap
+// warning instead, never both.
+func TestTrendWarning(t *testing.T) {
+	rising := series(400, 410, 420, 430, 440) // trends to exactly 540
+	at := func(s float64) []result { return []result{{Package: "p", Action: "pass", Elapsed: s}} }
+
+	ws := capWarnings(at(545), rising, "")
+	if len(ws) != 1 || !strings.HasPrefix(ws[0], "::warning title=test cap::p ") {
+		t.Errorf("545s with a rising history: want the cap warning only, got %q", ws)
+	}
+	ws = capWarnings(at(400), rising, "")
+	if len(ws) != 1 || !strings.HasPrefix(ws[0], "::warning title=test trend::p ") || !strings.Contains(ws[0], "540s") {
+		t.Errorf("400s with a rising history: want one trend warning naming p and 540s, got %q", ws)
+	}
+	if ws := capWarnings(at(400), series(400, 400, 400, 400, 400), ""); len(ws) != 0 {
+		t.Errorf("400s with a flat history: want no warning, got %q", ws)
+	}
+	testRow := []result{{Package: "p", Test: "TestSlow", Action: "pass", Elapsed: 900}}
+	if ws := capWarnings(testRow, rising, ""); len(ws) != 0 {
+		t.Errorf("a test row (not a package) drew %q", ws)
+	}
+}
+
+// TestPackageTotalsBaseline (c-4, decision baseline): the totals table gains
+// a baseline (the history's median) and a signed delta; a package absent
+// from the history shows "—" and no delta.
+func TestPackageTotalsBaseline(t *testing.T) {
+	h := history{Entries: []historyEntry{
+		{SHA: "a", Packages: map[string]float64{"up": 10, "down": 10}},
+		{SHA: "b", Packages: map[string]float64{"up": 30, "down": 30}},
+		{SHA: "c", Packages: map[string]float64{"up": 20, "down": 20}},
+	}}
+	out := timingTable([]result{
+		{Package: "up", Action: "pass", Elapsed: 25},
+		{Package: "down", Action: "pass", Elapsed: 15},
+		{Package: "new", Action: "fail", Elapsed: 5},
+	}, h, "")
+	if !strings.Contains(out, "### Package totals\n\n| Package | Seconds | Baseline | Delta | Result |\n") {
+		t.Fatalf("package totals header changed:\n%s", out)
+	}
+	got := map[string][]string{}
+	for _, row := range tableRows(t, out, "Package totals") {
+		got[row[0]] = row
+	}
+	want := map[string][]string{
+		"up":   {"up", "25.00", "20.00", "+5.00", "pass"},
+		"down": {"down", "15.00", "20.00", "-5.00", "pass"},
+		"new":  {"new", "5.00", "—", "", "FAIL"},
+	}
+	for pkg, w := range want {
+		if strings.Join(got[pkg], "|") != strings.Join(w, "|") {
+			t.Errorf("%s row = %q, want %q", pkg, got[pkg], w)
+		}
+	}
 }

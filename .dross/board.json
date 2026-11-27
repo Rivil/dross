@@ -15,6 +15,7 @@
     "board-sync-truth": "DRO-19",
     "board-task-mirror": "DRO-32",
     "cache-budget-prune": "DRO-132",
+    "ci-timing-trend": "DRO-1200",
     "cmd-exec-baseline-drain": "DRO-708",
     "cmd-package-decomposition": "DRO-477",
     "cmd-test-duration": "DRO-634",
@@ -678,6 +679,21 @@
     },
     "board-task-mirror/t-7": {
       "issue": "DRO-123"
+    },
+    "ci-timing-trend/t-1": {
+      "issue": "DRO-1201",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ci-timing-trend/t-2": {
+      "issue": "DRO-1202",
+      "plan_status": "done",
+      "board_state": "task-in-review"
+    },
+    "ci-timing-trend/t-3": {
+      "issue": "DRO-1203",
+      "plan_status": "done",
+      "board_state": "task-in-review"
     },
     "cmd-exec-baseline-drain/t-1": {
       "issue": "DRO-709",

@@ -21,8 +21,10 @@ const slowestRows = 20
 // timingTable renders the step-summary markdown from the reduced results: the
 // slowest top-level tests, then every package's total as its own terminal
 // event reports it — which counts setup, TestMain and parallel overlap that a
-// sum of test rows would not.
-func timingTable(results []result) string {
+// sum of test rows would not — beside its baseline (the median of h, minus the
+// entry for excludeSHA) and this run's delta against it. A package h does not
+// hold shows baseline "—" and no delta.
+func timingTable(results []result, h history, excludeSHA string) string {
 	var tests, pkgs []result
 	for _, r := range results {
 		switch {
@@ -46,9 +48,13 @@ func timingTable(results []result) string {
 	for _, r := range tests {
 		fmt.Fprintf(&b, "| %s | %s | %.2f | %s |\n", r.Package, r.Test, r.Elapsed, resultLabel(r.Action))
 	}
-	fmt.Fprintf(&b, "\n### Package totals\n\n| Package | Seconds | Result |\n|---|---:|---|\n")
+	fmt.Fprintf(&b, "\n### Package totals\n\n| Package | Seconds | Baseline | Delta | Result |\n|---|---:|---:|---:|---|\n")
 	for _, r := range pkgs {
-		fmt.Fprintf(&b, "| %s | %.2f | %s |\n", r.Package, r.Elapsed, resultLabel(r.Action))
+		base, delta := "—", ""
+		if m, ok := h.baseline(r.Package, excludeSHA); ok {
+			base, delta = fmt.Sprintf("%.2f", m), fmt.Sprintf("%+.2f", r.Elapsed-m)
+		}
+		fmt.Fprintf(&b, "| %s | %.2f | %s | %s | %s |\n", r.Package, r.Elapsed, base, delta, resultLabel(r.Action))
 	}
 	return b.String()
 }
@@ -70,6 +76,27 @@ func budgetWarnings(results []result) []string {
 		if r.Test == "" && r.Elapsed > budgetSeconds {
 			out = append(out, fmt.Sprintf("::warning title=test budget::%s took %.1fs, over the %ds per-package budget\n",
 				escapeData(r.Package), r.Elapsed, budgetSeconds))
+		}
+	}
+	return out
+}
+
+// capWarnings is the cap and trend `::warning`s for this run's packages. A
+// package at or over capWarnSeconds (90% of go test's 10m wall) draws a cap
+// warning; one under it whose history — minus the entry for excludeSHA, so a
+// re-run never trends against itself — is heading for that line draws a trend
+// warning instead. Neither ever changes the exit code.
+func capWarnings(results []result, h history, excludeSHA string) []string {
+	var out []string
+	for _, r := range results {
+		switch {
+		case r.Test != "":
+		case r.Elapsed >= capWarnSeconds:
+			out = append(out, fmt.Sprintf("::warning title=test cap::%s took %.1fs, at or over 90%% of the %ds cap (go test's default timeout)\n",
+				escapeData(r.Package), r.Elapsed, capSeconds))
+		case h.trend(r.Package, excludeSHA):
+			out = append(out, fmt.Sprintf("::warning title=test trend::%s took %.1fs and its timing history is on course to reach %ds (90%% of the %ds cap) within %d runs\n",
+				escapeData(r.Package), r.Elapsed, capWarnSeconds, capSeconds, trendHorizon))
 		}
 	}
 	return out

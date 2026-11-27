@@ -190,6 +190,9 @@ localstore.Store.MutationWorkers mutation_workers
 localstore.Store.QuickBase quick_base
 localstore.Store.RemoteHost remote_host
 
+# ---- main (cmd/testsummary) — the CI timing history's entry key: a commit SHA, never a path
+main.historyEntry.SHA sha
+
 # ---- memadvise — the turn cache's recent message ids, and a transcript line's kind ("assistant", "user", …) and timestamp, never paths
 memadvise.fileEntry.Tail tail
 memadvise.transcriptLine.Timestamp timestamp

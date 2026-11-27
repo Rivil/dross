@@ -1,0 +1,99 @@
+[verify]
+  phase = "ci-timing-trend"
+  generated_at = 2026-11-26T17:00:59.894351Z
+  verdict = "pass"
+  finalized = true
+  finalized_at = 2026-11-26T20:56:02.544706Z
+  measured_commit = "fb466772da7afd681a0546a468536f76c068cc29"
+  measured_tree = "08ad877acb47ae4a4e180a2b19c7851af4104fd8"
+
+[summary]
+  mutation_status = "measured"
+  measured_on = "helicon"
+  mutation_score = 0.925
+  mutants_killed = 74
+  mutants_survived = 6
+  mutants_not_covered = 6
+  mutants_no_block = 5
+  mutants_test_gap = 1
+  mutants_in_scope = 80
+  unclassified_in_scope = 0
+  criteria_total = 6
+  criteria_covered = 6
+  criteria_uncovered = 0
+
+  [[summary.leg]]
+    language = "go"
+    tool = "gremlins"
+    killed = 74
+    survived = 6
+    timeout = 0
+    in_scope = 80
+    score = 0.925
+    file_count = 8
+    measured_on = "helicon"
+    whole_file = ["cmd/testsummary/history.go — adapter-lacks-range-runner", "cmd/testsummary/history_test.go — adapter-lacks-range-runner", "cmd/testsummary/main.go — adapter-lacks-range-runner", "cmd/testsummary/main_test.go — adapter-lacks-range-runner", "cmd/testsummary/table.go — adapter-lacks-range-runner", "cmd/testsummary/table_test.go — adapter-lacks-range-runner", "internal/cmd/ci_go_test_step_test.go — adapter-lacks-range-runner", "internal/cmd/ci_timing_cache_test.go — adapter-lacks-range-runner"]
+
+[[criterion]]
+  id = "c-1"
+  status = "covered"
+  tests = ["internal/cmd/ci_timing_cache_test.go:TestCITimingCacheLive", "internal/cmd/ci_timing_cache_test.go:TestTimingCacheCheckerCatchesEachBreak", "cmd/testsummary/main_test.go:TestRunHistoryMissing", "cmd/testsummary/main_test.go:TestRunSameSHATwice"]
+  notes = "restore→go test→save wiring pinned live + per-break synthetic fixtures; run() writes the file and a second run reads it back with no note. Live cross-run actions/cache round-trip only observable after main merge."
+
+[[criterion]]
+  id = "c-2"
+  status = "covered"
+  tests = ["cmd/testsummary/table_test.go:TestCapWarning", "cmd/testsummary/table_test.go:TestBudgetWarning"]
+  notes = "540.0 warns / 539.9 does not; 541s draws cap + byte-identical 300s budget warning; capSeconds pinned to 600."
+
+[[criterion]]
+  id = "c-3"
+  status = "covered"
+  tests = ["cmd/testsummary/history_test.go:TestTrend", "cmd/testsummary/history_test.go:TestTrendExcludesSHA", "cmd/testsummary/table_test.go:TestTrendWarning"]
+  notes = "fit at x=14 exactly 540.0 warns, 539.5 does not; <5 points, flat and falling never warn; last-10 window and self-SHA exclusion pinned."
+
+[[criterion]]
+  id = "c-4"
+  status = "covered"
+  tests = ["cmd/testsummary/table_test.go:TestPackageTotalsBaseline", "cmd/testsummary/history_test.go:TestBaselineMedian", "cmd/testsummary/main_test.go:TestRunReRunExcludesSelf"]
+  notes = "header with Baseline/Delta, median baseline and signed delta asserted per row; outlier does not move median."
+
+[[criterion]]
+  id = "c-5"
+  status = "covered"
+  tests = ["cmd/testsummary/history_test.go:TestLoadHistoryDegraded", "cmd/testsummary/main_test.go:TestRunHistoryMissing", "cmd/testsummary/main_test.go:TestRunHistoryCorrupt", "cmd/testsummary/table_test.go:TestPackageTotalsBaseline", "cmd/testsummary/main_test.go:TestRunWarningsKeepVerdict"]
+  notes = "missing/empty/invalid/no-entries each one note line, no trend warning; absent package shows — and empty delta; exit code equals verdict both ways."
+
+[[criterion]]
+  id = "c-6"
+  status = "covered"
+  tests = ["cmd/testsummary/history_test.go:TestUpsertReplacesSameSHA", "cmd/testsummary/main_test.go:TestRunSameSHATwice", "cmd/testsummary/main_test.go:TestRunReRunExcludesSelf"]
+  notes = "same SHA replaced in place at original position; end-to-end two runs leave one entry with second run's totals."
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped .github/workflows/ci.yml: no mutation adapter for .yml"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped ARCHITECTURE.md: no mutation adapter for .md"
+
+[[finding]]
+  severity = "NOTE"
+  text = "skipped internal/cmd/testdata/pathfence_scan/not_paths.txt: no mutation adapter for .txt"
+
+[[finding]]
+  severity = "NOTE"
+  text = "5 in-diff gremlins survivors (history.go:59,61; table.go:93,94x2) are switch-case conditions with no go-cover block on the condition columns; tests execute and assert each arm. Accepted under gremlins-attribution-ceiling. The 1 counted test gap (table.go:93) is the empty-case-arm overcount (DRO-851): its 93.21 block ran with count 1."
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review t-3 FLAG (non-blocking, left): a quoted 'TESTSUMMARY_HISTORY' key in mutation-ts env would slip past timingCacheProblems' bare-prefix match — a rare spelling; guard robustness, no criterion breaks."
+
+[[finding]]
+  severity = "NOTE"
+  text = "solo review t-2 FLAG (non-blocking, left): with TESTSUMMARY_HISTORY set and GITHUB_SHA empty (local run) totals upsert under sha \"\"; that entry is excluded and replaced each run, CI always sets GITHUB_SHA."
+
+[[finding]]
+  severity = "NOTE"
+  text = "c-1's cross-run actions/cache persistence is pinned structurally (TestCITimingCacheLive) and in-process (run() round-trip); the live main→next-run read-back is first observable after merge to main."

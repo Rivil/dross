@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -17,10 +18,13 @@ import (
 
 // wfStep is one step of a workflow job, as the line scanner sees it.
 type wfStep struct {
-	job   string
-	uses  string
-	shell string
-	run   []wfLine // the run: value, line by line; a single-line run is one entry
+	job    string
+	uses   string
+	shell  string
+	ifCond string            // the step's if: value
+	with   map[string]string // the with: mapping, one entry per flat key
+	env    map[string]string // the step-level env: mapping (job-level env is not a step's)
+	run    []wfLine          // the run: value, line by line; a single-line run is one entry
 }
 
 type wfLine struct {
@@ -36,7 +40,9 @@ var jobKey = regexp.MustCompile(`^  ([A-Za-z0-9_-]+):\s*$`)
 // until the next line indented at or above that dash, and a `run: |` / `run: >`
 // block holds every following line that is blank or indented past its `run:`
 // key (the dash, for a `- run: |` item) — kept verbatim, since a `#` there is
-// shell, not YAML.
+// shell, not YAML. A step's `with:` and `env:` mappings hold every following
+// line indented past their key, read as flat `key: value` pairs with one layer
+// of quotes stripped.
 func workflowSteps(workflow string) []wfStep {
 	var (
 		steps      []wfStep
@@ -46,6 +52,8 @@ func workflowSteps(workflow string) []wfStep {
 		stepIndent = -1
 		runIndent  int
 		inRun      bool
+		mapping    map[string]string // the with:/env: mapping being read, if any
+		mapIndent  int
 	)
 	flush := func() {
 		if cur != nil {
@@ -89,6 +97,13 @@ func workflowSteps(workflow string) []wfStep {
 		if job == "" {
 			continue
 		}
+		if mapping != nil && cur != nil && indent > mapIndent {
+			if k, v, ok := strings.Cut(key, ":"); ok {
+				mapping[strings.TrimSpace(k)] = unquoteYAML(strings.TrimSpace(v))
+			}
+			continue
+		}
+		mapping = nil
 		if rest, ok := strings.CutPrefix(key, "- "); ok {
 			flush()
 			cur = &wfStep{job: job}
@@ -99,6 +114,14 @@ func workflowSteps(workflow string) []wfStep {
 			continue
 		}
 		switch {
+		case key == "with:":
+			cur.with = map[string]string{}
+			mapping, mapIndent = cur.with, indent
+		case key == "env:":
+			cur.env = map[string]string{}
+			mapping, mapIndent = cur.env, indent
+		case strings.HasPrefix(key, "if:"):
+			cur.ifCond = unquoteYAML(strings.TrimSpace(strings.TrimPrefix(key, "if:")))
 		case strings.HasPrefix(key, "uses:"):
 			cur.uses = strings.TrimSpace(strings.TrimPrefix(key, "uses:"))
 		case strings.HasPrefix(key, "shell:"):
@@ -117,6 +140,20 @@ func workflowSteps(workflow string) []wfStep {
 	}
 	flush()
 	return steps
+}
+
+// unquoteYAML strips the quotes of a quoted scalar: a value that opens with a
+// quote is a quoted scalar in YAML, so it must close with the same one. A
+// trim of every quote character would eat the `'` closing an if: such as
+// `github.ref == 'refs/heads/main'`.
+func unquoteYAML(v string) string {
+	if len(v) < 2 || (v[0] != '\'' && v[0] != '"') || v[len(v)-1] != v[0] {
+		return v
+	}
+	if v[0] == '\'' {
+		return strings.ReplaceAll(v[1:len(v)-1], "''", "'")
+	}
+	return v[1 : len(v)-1]
 }
 
 // goTestInvocation is one `go test` command in a run: value.
@@ -287,6 +324,18 @@ jobs:
   other:
     steps:
       - uses: actions/checkout@aaaa  # v4
+      - name: save
+        if: always() && github.ref == 'refs/heads/main'  # a YAML comment
+        uses: actions/cache/save@bbbb  # v6.1.0
+        with:
+          path: ${{ runner.temp }}/h.json
+          # a comment inside the mapping
+          key: 'it''s-${{ github.sha }}'
+        env:
+          A: "1"
+        continue-on-error: true
+      - if: "github.run_attempt == 1"
+        run: echo done
 `
 	got := goTestSteps(wf)
 	if len(got) != 2 {
@@ -299,11 +348,37 @@ jobs:
 		t.Errorf("second = %+v, want line 15, shell bash, pipefail in its run text", got[1])
 	}
 	steps := workflowSteps(wf)
-	if len(steps) != 4 || steps[3].job != "other" || !strings.HasPrefix(steps[3].uses, "actions/checkout") {
-		t.Fatalf("steps = %+v, want 4 with the last a checkout in job other", steps)
+	if len(steps) != 6 || steps[3].job != "other" || !strings.HasPrefix(steps[3].uses, "actions/checkout") {
+		t.Fatalf("steps = %+v, want 6 with the fourth a checkout in job other", steps)
 	}
 	if n := len(steps[1].run); n != 3 {
 		t.Errorf("the block step's run holds %d lines, want 3 — the working-directory key after it is not run text", n)
+	}
+
+	// with:, env: and if: are recorded per step: the comment and quotes are
+	// stripped, the mapping ends at the next step-level key, and no step
+	// without the key inherits another's.
+	save := steps[4]
+	if save.ifCond != "always() && github.ref == 'refs/heads/main'" {
+		t.Errorf("save if: = %q, want the condition with its closing quote and without the comment", save.ifCond)
+	}
+	if !strings.HasPrefix(save.uses, "actions/cache/save@bbbb") {
+		t.Errorf("save uses: = %q, want actions/cache/save@bbbb", save.uses)
+	}
+	wantWith := map[string]string{"path": "${{ runner.temp }}/h.json", "key": "it's-${{ github.sha }}"}
+	if !reflect.DeepEqual(save.with, wantWith) {
+		t.Errorf("save with: = %v, want %v", save.with, wantWith)
+	}
+	if wantEnv := map[string]string{"A": "1"}; !reflect.DeepEqual(save.env, wantEnv) {
+		t.Errorf("save env: = %v, want %v — continue-on-error is a step key, not an env entry", save.env, wantEnv)
+	}
+	if last := steps[5]; last.ifCond != "github.run_attempt == 1" || len(last.run) != 1 {
+		t.Errorf("last step = %+v, want a double-quoted if: unquoted and its run kept", last)
+	}
+	for _, i := range []int{0, 1, 3} {
+		if s := steps[i]; s.ifCond != "" || s.with != nil || s.env != nil {
+			t.Errorf("step %d = %+v, want no if:, with: or env:", i, s)
+		}
 	}
 }
 
