@@ -683,17 +683,17 @@
     "ci-timing-trend/t-1": {
       "issue": "DRO-1201",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ci-timing-trend/t-2": {
       "issue": "DRO-1202",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "ci-timing-trend/t-3": {
       "issue": "DRO-1203",
       "plan_status": "done",
-      "board_state": "task-in-review"
+      "board_state": "task-complete"
     },
     "cmd-exec-baseline-drain/t-1": {
       "issue": "DRO-709",
